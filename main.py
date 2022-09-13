@@ -664,7 +664,7 @@ def tab2_layout(tab2):
     tab2_update_listBox(pub_topic_list)  #add topics to our list
     tab2_listBox.bind("<<ListboxSelect>>", tab2_fillOut)  #create a binding on the listbox onclick
 
-    tab2_help = Label(tab2, text="[ Help ]")
+    tab2_help = Label(tab2, text="[ Help ]", background='#80AABA', foreground='white')
     tab2_help.config(font=(myFont, 12), borderwidth=1, relief='raised', anchor=CENTER, justify=LEFT)
     tab2_help.grid(column=0, row=3, padx=(40,0), pady=(5,15), ipadx=2, sticky=N+S)
     ToolTip(tab2_help, msg='Click on a topic and a message\nabove to auto-fill or manually\ntype into the textbox.',
@@ -876,7 +876,7 @@ def create_right_frame(container):
     terminal_list['state'] = DISABLED
 
     #textbox for user terminal
-    terminal_input_frame = Frame(frame)
+    terminal_input_frame = Frame(frame, background=light_grey)
     terminal_input_frame.grid(column=0, row=3, padx=10, ipadx=2, ipady=1, sticky=W+E+N+S)
 
     terminal_input = Entry(terminal_input_frame)
@@ -957,33 +957,29 @@ def create_left_frame(container):
     select_device.pack(fill=BOTH, expand=TRUE)
 
     #(0,1) below that, account and device information
-    device_info_frame = Frame(frame, background='white', borderwidth=2, relief=RAISED)
-    device_info_frame.grid(column=0, row=1, rowspan=2, padx=(30,20), pady=(0,10), sticky=W+E+N+S)
+    device_info_frame = Frame(frame, background='#0f5d73', borderwidth=2, relief=RAISED)
+    device_info_frame.grid(column=0, row=1, rowspan=2, padx=(30,20), pady=(0,10))
 
-    '''
-    device_info = Label(device_info_frame, text=('Select device above\nfor more information.'))
-    device_info.config(font=(myFont, 9), background='white', anchor=CENTER, justify=LEFT)
-    device_info.pack(fill=BOTH, expand=TRUE)
-    '''
-    device_info = Text(device_info_frame, background='white', foreground='black', width=25, height=2, wrap=WORD)
+    device_info = Text(device_info_frame, background='#0f5d73', foreground='white', width=25, height=7, wrap=WORD)
     device_info.config(highlightthickness=0, borderwidth=0, font=(myFont, 10), spacing1=5, spacing2=2, spacing3=2)
     device_info.pack(padx=15, pady=(7,3), fill=BOTH, expand=TRUE)
     device_info.tag_configure("align", justify='center')
     device_info.tag_configure("bold", font=(None, 10, BOLD))
 
-    select_message = "\nSelect device above\n for more information."
+    select_message = "\n\nSelect device above\n for more information."
     device_info.insert(END, select_message, "align")
     device_info['state'] = DISABLED
 
     #(0,3) mqtt user information
-    mqtt_info_frame = Frame(frame, borderwidth=2, relief=RAISED)
-    mqtt_info_frame.grid(column=0, row=3, padx=(30,20), sticky=W+E+N+S)
+    mqtt_info_frame = Frame(frame, borderwidth=2, relief=RAISED, background='#186e99')
+    mqtt_info_frame.grid(column=0, row=3, rowspan=3, padx=(30,20))
     
-    mqtt_info = Text(mqtt_info_frame, background='white', foreground='black', width=25, height=7, wrap=CHAR)
+    mqtt_info = Text(mqtt_info_frame, background='#186e99', foreground='white', width=25, height=10, wrap=CHAR)
     mqtt_info.config(highlightthickness=0, borderwidth=0, font=(myFont, 10), spacing1=5, spacing2=2, spacing3=2)
-    mqtt_info.pack(padx=15, pady=(7,3), fill=BOTH, expand=TRUE)
+    mqtt_info.pack(padx=15, pady=(10,10), fill=BOTH, expand=TRUE)
     mqtt_info.tag_configure("align", justify='center')      #configure tags
     mqtt_info.tag_configure("bold", font=(None, 10, BOLD))
+    mqtt_info.tag_configure("spacing", font=(None, 3,))
 
     mqtt_endpoint_text = 'MQTT Endpoint:'
     mqtt_topic_prefix_text = 'MQTT Topic Prefix:'
@@ -991,28 +987,39 @@ def create_left_frame(container):
 
     mqtt_info.insert(END, mqtt_endpoint_text + '\n', "bold")
     mqtt_info.insert(END, mqtt_endpoint + '\n')
+    mqtt_info.insert(END, '\n', "spacing")
     mqtt_info.insert(END, mqtt_topic_prefix_text + '\n', "bold")
     mqtt_info.insert(END, mqtt_topic_prefix + '\n')
+    mqtt_info.insert(END, '\n', "spacing")
     mqtt_info.insert(END, mqtt_client_id_text + '\n', "bold")
     mqtt_info.insert(END, client_id)
     
     mqtt_info.tag_add("align", 1.0, END)
     mqtt_info['state'] = DISABLED
 
-    # (0,4) blank space for now
-    blank_space_frame = Frame(frame)
-    blank_space_frame.grid(column=0, row=4, rowspan=3, padx=(30,20), pady=10, ipady=1, sticky=W+E+N+S)
+    #(0,4) show account type
+    account_type_frame = Frame(frame, borderwidth=2, relief=RAISED, background='#298b9e')
+    account_type_frame.grid(column=0, row=6, padx=(30,20))
 
-    blank_space = Label(blank_space_frame, text=(''), borderwidth=5, relief="ridge")
-    blank_space.config(font=(myFont, 9), background='grey')
-    blank_space.pack(pady=(0,5), fill=BOTH, expand=TRUE)
+    account_type_text = Text(account_type_frame, background='#298b9e', foreground='white', width=25, height=2, wrap=CHAR)
+    account_type_text.config(highlightthickness=0, borderwidth=0, font=(myFont, 10), spacing1=5, spacing2=2, spacing3=2)
+    account_type_text.pack(padx=15, pady=7, fill=BOTH, expand=TRUE)
+    account_type_text.tag_configure("align", justify='center')  #configure tags
+    account_type_text.tag_configure("bold", font=(None, 10, BOLD))
+
+    account_type_label = 'Account Type:'
+
+    account_type_text.insert(END, account_type_label + '\n', "bold")
+    account_type_text.insert(END, account_type)
+    account_type_text.tag_add("align", 1.0, END)    #center all
+    account_type_text['state'] = DISABLED 
 
     #(0,7) bottom left, log off button
     log_off_frame = Frame(frame, background=light_grey)
     log_off_frame.grid(column=0, row=7, padx=10, pady=15, sticky=W+E+S)
 
     log_off = Button(log_off_frame, text="Log Off", command=restartPopup)
-    log_off.config(activebackground='#9ed3e8', activeforeground='white')
+    log_off.config(activebackground='#9ed3e8', activeforeground='white', background='#505f63', foreground='white')
     log_off.pack(pady=(0,10), fill=BOTH, expand=TRUE)
     button_config(log_off)
 
