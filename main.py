@@ -5,7 +5,6 @@ A .ini file is created to save the valid API keys and certificates.
 
 '''
 import argparse
-from ctypes import addressof
 import json
 from tkinter import ttk
 import paho.mqtt.client as mqtt
@@ -15,7 +14,7 @@ import os
 from tkinter import *
 from tkinter import filedialog as fd
 from tkinter.font import BOLD
-from tkinter.ttk import Combobox, Notebook, Style
+from tkinter.ttk import Combobox, Notebook
 from tktooltip import ToolTip
 
 import http_requests
@@ -44,8 +43,9 @@ client_id = ''
 mqtt_topic_prefix = ''
 mqtt_endpoint = ''
 topic = None 
-resp = None     #uses HTTP CREATE acc dev
-resp2 = None    #uses HTTP GET dev info
+
+http_create = None
+http_get = None
 certs_flag = None
 client_flag = None
 first_start_flag = 0
@@ -68,6 +68,7 @@ nordic_blue = '#00A9CE'
 nordic_blueslate = '#0033A0'
 nordic_lake = '#0077C8'
 
+'''
 def parse_args():
     parser = argparse.ArgumentParser(description="Device Credentials Installer",
                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -85,6 +86,8 @@ def parse_args():
 args = parse_args()
 api_key = args.apikey
 target_device = args.deviceid
+'''
+
 config = configparser.ConfigParser()    #instantiate config parser for login info
 topic_config = configparser.ConfigParser(allow_no_value=True)   #config parser for topics
 
@@ -210,12 +213,19 @@ def on_subscribe(client, userdata, mid, granted_qos):
 
 def on_connect(client, userdata, flags, rc):
     '''MQTT broker connect callback.'''
-    print('Response: ' + mqtt.connack_string(rc))
-    if rc == mqtt.CONNACK_ACCEPTED:
-        #terminal_insert.insert("end-1c", "CONNACK received. Returned code = ", rc)
-        print("CONNACK RECEIVED. Returned code = ", rc)
-        client.connected_flag = True 
+    global subscribed_topics_list
 
+    if rc == mqtt.CONNACK_ACCEPTED:
+        client.connected_flag = True 
+    
+        '''If the program reconnects by itself, we need to unsubscribe from all topics and re-subscribe to them
+        after. This means we need to clear our list array that holds the subscribed topics but keep the 
+        config parser file to remember what to subscribe back to.'''
+        if subscribed_topics_list:  #if not empty
+            for topic in subscribed_topics_list:
+                client.unsubscribe(topic)    #unsubcribe from all subscribed topics
+            subscribed_topics_list.clear() #clear subscription list
+        
         #check if we have a file saved for list of subscribed topics from previous session if applicable
         check_subscribed_topics()
 
@@ -277,6 +287,7 @@ def do_unsubscribe():
 def do_subscribe(): #client.subscribe() work in here
     global topic
     global tab1_subscribed_list
+    global address
 
     if client_flag == 0:
         terminal_print('Please select a target device.')
@@ -284,19 +295,25 @@ def do_subscribe(): #client.subscribe() work in here
     topic = tab1_sub_to_topic.get() #grab what was typed in the sub_to_topic entry box
     address = topics.compare_subs(topic, mqtt_topic_prefix, target_device) #function to compare topics to get their actual address if selected from listbox
     terminal_print("Address: " + address)
-    client.subscribe(address, qos=0)
 
     #check if it's in our list of subscribed topics
     if address not in subscribed_topics_list:   #make sure there's no duplicates
         subscribed_topics_list.append(address)  #add to our subscribed topics list
 
-        topic_config[account_type][target_device] = {address}   #and add to file
+        client.subscribe(address, qos=0)
+
+
+        topic_config[account_type][address] = ''   #and add to file
+        #topic_config[account_type][target_device] = {address}  #use this for  
         with open('saved_topics.ini', 'w') as topic_configfile:
             topic_config.write(topic_configfile)
+    else:
+        terminal_print('Already subscribed to topic.')
+    
         
 def check_subscribed_topics():
     file_exists = os.path.exists('saved_topics.ini')
-    if file_exists is not True:  #create file and add section for subscribe topics
+    if file_exists is not True:  #create file and add section for subscribed topics
         topic_config['Prod'] = {}
         topic_config['Beta'] = {}
         topic_config['Dev'] = {}
@@ -318,7 +335,7 @@ def check_subscribed_topics():
                 print('subscribed list:', subscribed_topics_list)
 
 def pub_message_check(msg): #user custom message
-    if msg == '':
+    if msg == '' or msg == '{None}':
         msg = None
     else:
         msg = msg
@@ -332,8 +349,7 @@ def check_message(message, curr_msg_topic):  #function to handle exceptions
     except Exception as e:
         print("Couldn't parse raw data: %s" % message, e)
     else:
-        #print("JSON:", unpacked_json)
-        #print(type(unpacked_json))
+        print("JSON:", unpacked_json)
         sort_message(unpacked_json, curr_msg_topic)
 
 def sort_message(unpacked_json, curr_msg_topic):       
@@ -348,65 +364,86 @@ def sort_message(unpacked_json, curr_msg_topic):
     for key, value in unpacked_json.items():    #iterate for single key-value pair
         if isinstance(value, dict):
             for key2, value2 in value.items():  #iterate for a value with value
-                print(key2, ':', value2)
-                curr_line = key2 + ':' + str(value2)
-                message_array.append(curr_line)  #store into array
-                '''Unable to pick "lte" apart or get rid of brackets for "networkInfo"
+                value2 = str(value2)
+                value2 = value2.strip('{}')     #this gets rid of brackets for "networkInfo"
+                
+                #Unable to pick "lte" apart
                 if isinstance(value2, dict):
                     for key3, value3 in value2.items():  #iterate for a value with a value with value
-                        print(key3, ':', value3)       
-                '''  
+                        print('third iteration: ', key3, ':', value3)
+                        value3 = str(value3)
+                        value3 = value3.strip('{}')
+                        curr_line = key3 + ':' + str(value3)
+                        message_array.append(curr_line)
+                else:
+                    print("is instance 2: {0} : {1}".format(key2, value2))
+                    curr_line = key2 + ':' + str(value2)
+                    message_array.append(curr_line)    
         else:
-            print("{0} : {1}".format(key, value)) 
             curr_line = key + ': ' + str(value)
             message_array.append(curr_line)
     print('\n')
 
-    #pass to function to put into message tab
+    message_array = [x for x in message_array if not x.startswith('lte')]   #just going to completely ignore 'lte' and everything after it for now
     print('message array:', message_array)
-    output_messages(message_array, curr_msg_topic)
+    output_messages(message_array, curr_msg_topic)  #pass to function to put into message tab
+
+    
+    #plot for "activity"? Everytime we go through here, put a point on the plot vs. time
+    #Also read message array here to pull out whatever data we need to plot on the graph vs time
+    #i.e. if "voltage" exists in the array, find the key "data" and grab that value out to plot (send to plots.py)
+    #for key "appId" = RSRP value, get value of key "data"
+    #or              = VOLTAGE, get value of key "data" 
+
 
 def insert_treeview_topic():
     global curr_msg_topic
 
     tab3_topic = [] #list for topics in Treeview in Tab3
-    
+    curr_msg_topic = address
     if topic not in tab3_topic:
         if topic == None:  #for initial subscriptions in the beginning of program
             short_topic = '...' + address[-10:]  #only show the last 10 characters of a topic
-            curr_msg_topic = address
+            
             tab3_tree.insert("", END, iid=curr_msg_topic, text=short_topic)
             tab3_topic.append(address)
             
             print('1:', tab3_topic)
             print('address:', address)
         else:
-            short_topic = topics.shorten_topic(topic)
-            short_topic = '...' + topic[-10:]
-            tab3_tree.insert("", END, iid=curr_msg_topic, text=short_topic)     #parent
+
+            short_topic = '...' + address[-10:]
+            tab3_tree.insert("", END, iid=curr_msg_topic, text=short_topic, tags='topic')     #parent
             tab3_topic.append(topic)
             
             print('2:', tab3_topic)
             print('topic:', topic)
 
 def output_messages(message_array, curr_msg_topic):
-    global j 
-
-    #insert messages in Treeview in its appropriate topic section
+    count_msg = 1   #start at 1 to account for the blank line
     curr_msg_topic = str(curr_msg_topic)
-    for i in message_array:
-        tab3_tree.insert(parent=curr_msg_topic, index=j, values=i)    #child, insert from top
-        j = j + 1
+    children = tab3_tree.get_children(curr_msg_topic)
+    message_count = len(children)
 
-    '''
-    i = tab3_tree.insert("", END, text="Topic1")
-    #this could be the data topic
-    tab3_tree.insert(parent=i, index=0, iid=0, values=('SubTopic1', 5, 'Time1'), tags='odd')
-    #this could be a data value
-    tab3_tree.insert(parent=i, index=1, iid=1, values=('SubTopic2', 10, 'Time2'), tags='even')
-    j = tab3_tree.insert("", END, text="Topic2")
-    tab3_tree.insert(parent=j, index=2, iid=2, values=('SubTopic3', 3, 'Time3'), tags='odd')
-    '''
+    print('children: ', children)
+    print('message count1:', message_count)
+
+    if message_count > 20:  #limit 20 messages per topic
+        for record in reversed(children): #reverse, delete oldest record (starting from [0]) and increase all other records by 1
+            oldest_item = tab3_tree.index(record)
+            if record == oldest_item:
+                tab3_tree.delete(record)
+
+            tab3_tree.move(record, tab3_tree.parent(record), tab3_tree.index(record)+1) #move everything else down
+    
+    #insert messages in Treeview in its appropriate topic section
+    for i in message_array:
+        tab3_tree.insert(parent=curr_msg_topic, index=0, values=i, tags='dark')    #child, insert from top
+        count_msg = count_msg + 1
+    print(count_msg)
+
+    tab3_tree.insert(parent=curr_msg_topic, index=0, values='', tags='light') #blank line in between chunk of messages
+    
 
 '''Tab 2 Stuff'''
 def tab2_update_msgBox(data):   #add list of messages into box
@@ -471,24 +508,12 @@ def tab1_checkKeyPress(e):
                 data.append(item)
     tab1_update_listBox(data)    #update listbox with selected topics
 
-'''
-def insert_mqtt_info():
-    global mqtt_info 
-
-    if client_flag == 1:
-        if target_device == 'Select Device...': #no device selected
-            mqtt_info.config(text='\n\n') 
-        elif target_device != 'Select Device...':   #device selected, output collected info
-            mqtt_info.config(text='MQTT Endpoint: \n' + mqtt_endpoint +
-                              '\n\nMQTT Topic Prefix: \n' + mqtt_topic_prefix +
-                              '\n\nMQTT Client ID: \n' + client_id)
-'''
-
 def change_device(*args):
     global target_device
     global device_specifics 
     global device_info
     global client_flag
+    global first_start_flag2
 
     device_specifics = []
     target_device = device_list.get()   #get user selection from dropdown menu
@@ -509,6 +534,7 @@ def change_device(*args):
             client.disconnect()
             client.loop_stop()
             if first_start_flag2 == 0:
+                first_start_flag2 = first_start_flag2 + 1
                 return 
 
             device_info['state'] = NORMAL 
@@ -521,7 +547,7 @@ def change_device(*args):
             client.disconnect() #disconnect from the current device before switching
             client.loop_stop()  #then continue with bottom code
     #change device details depending on the device selected
-    for device in resp2['items']:
+    for device in http_get['items']:
         if device['id'] == target_device:
             separate = 'T'  #delete T and everything after it, only want the date
             createdDate = device['$meta']['createdAt']
@@ -566,7 +592,7 @@ def tab3_layout(tab3):
     tab3_tree.heading(1, text='Messages')
     tab3_tree.heading(2, text='Data')
 
-    tab3_tree.column('#0', width=90, anchor=W)
+    tab3_tree.column('#0', width=95, anchor=W)
     tab3_tree.column(1, anchor=W)
     tab3_tree.column(2, anchor=W)
 
@@ -574,9 +600,9 @@ def tab3_layout(tab3):
     style2.configure("Treeview.Heading", font=(myFont, 10, 'bold'), background=lighter_grey, foreground=nordic_blueslate)
     style2.configure("Treeview", font=(myFont, 10), background='white')
 
-    tab3_tree.tag_configure('icon', font=(myFont, 10, 'bold'), background=lighter_grey, foreground=nordic_blueslate)
-    tab3_tree.tag_configure('odd', background='#E8E8E8')
-    tab3_tree.tag_configure('even', background='#DFDFDF')
+    tab3_tree.tag_configure('topic', font=(myFont, 10, 'bold'), background=lighter_grey, foreground=nordic_blueslate)
+    tab3_tree.tag_configure('light', background='#E8E8E8')
+    tab3_tree.tag_configure('dark', background='#DFDFDF')
 
     
     #frame for right column (plots)
@@ -944,7 +970,7 @@ def create_left_frame(container):
     device_list.set("Select Device...")
    
     device_options.append('Select Device...')
-    for device in resp2['items']:
+    for device in http_get['items']:
         if device['id'].startswith('nrf-'): #only include devices and not account device
             device_options.append(device['id'])    #put device IDs in device_list array
 
@@ -1029,19 +1055,20 @@ def create_left_frame(container):
 
 def main_screen():
     '''Main Screen Configuration'''  
-    root.attributes('-alpha', 1)    #turn off transparency for main page
-    #build two frames for main window
-    root.columnconfigure(0, weight=1)
-    root.columnconfigure(1, weight=6)
-    root.rowconfigure(0, weight=1)
+    root.deiconify()    #show main page
+    if first_start_flag == 0:   #only build once
+        #build two frames for main window
+        root.columnconfigure(0, weight=1)
+        root.columnconfigure(1, weight=6)
+        root.rowconfigure(0, weight=1)
 
-    left_frame = create_left_frame(root)
-    left_frame.config(background=light_grey)
-    left_frame.grid(column=0, row=0, sticky=W+E+N+S)
+        left_frame = create_left_frame(root)
+        left_frame.config(background=light_grey)
+        left_frame.grid(column=0, row=0, sticky=W+E+N+S)
 
-    right_frame = create_right_frame(root)
-    right_frame.config(background=light_grey)
-    right_frame.grid(column=1, row=0, sticky=W+E+N+S)
+        right_frame = create_right_frame(root)
+        right_frame.config(background=light_grey)
+        right_frame.grid(column=1, row=0, sticky=W+E+N+S)
 
 def edit_config_file(flag, data): #store new values into file
     if flag == 1:   #store into API
@@ -1057,6 +1084,8 @@ def edit_config_file(flag, data): #store new values into file
             config.write(configfile)    #write changes to file
 
 def complete_login():   #save the rest of the login info before moving on to main screen
+    global radiobutton_var
+    
     #store valid certificates on configparser file
     if client_cert not in data_to_list_client: #check if client certificate has been saved before
         flag = 2    #store new valid client_cert into configparser file
@@ -1068,23 +1097,42 @@ def complete_login():   #save the rest of the login info before moving on to mai
 
     login.grab_release()    #remove focus
     login.withdraw()    #close login window
-    main_screen()   #continue with main screen
+    main_screen()   #continue with main screen program
+
+def reset_program():
+    device_list.set("Select Device...")  #reset target_device
+
+    device_info['state'] = NORMAL   #reset device info textbox
+    device_info.delete(1.0, END)
+    device_info.insert(END, select_message, "align")
+    device_info['state'] = DISABLED 
+
+    tab1_subscribed_list.delete(0, END) #empty subscribed topics listbox
+
+    #clear messages tab
+    for i in tab3_tree.get_children():
+        tab3_tree.delete(i)
 
 def popupLogin():
+    reset_program()
     logOff.withdraw()   #hide prior window
-    tab1_subscribed_list.delete(0,END)    #clear subscribed topics list
+    root.withdraw() #hide main window
 
     if client_flag ==1:
         client.disconnect()
         client.loop_stop()
-    root.attributes('-alpha', 0.8)  #make main screen transparent
+    root.withdraw()  #hide main screen
     login.deiconify()   #show login screen
     login.grab_set()    #disable main screen, focus on login
+    
+    radiobutton_var.set(None) #reset radiobuttons
+    clientCert_file_input.set('') #and reset inputs
+    privKey_file_input.set('')
+    apikey_input.set('')
 
 def restartReturn():
     logOff.grab_release()
     logOff.withdraw()
-    root.attributes('-alpha', 1)
 
 def restartPopup():
     global logOff      
@@ -1130,8 +1178,8 @@ def connectMQTT():
     global client_id 
     global client_flag
 
-    mqtt_endpoint = resp['mqttEndpoint']
-    mqtt_topic_prefix = resp['mqttTopicPrefix']
+    mqtt_endpoint = http_create['mqttEndpoint']
+    mqtt_topic_prefix = http_create['mqttTopicPrefix']
     client_id = mqtt_topic_prefix[mqtt_topic_prefix.index('/')+1:]
     client_id = client_id[:client_id.index('/')]
     client_id = 'account-' + client_id 
@@ -1261,14 +1309,14 @@ def get_file_paths():
         invalid_certs_alert()
 
 def find_account_device(api_key):
-    global resp2
+    global http_get
     global client_cert
     global priv_key
     global acc_device_id
 
-    resp2 = http_requests.http_req('GET', DEV_URL, api_key)   #fetch devices info
+    http_get = http_requests.http_req('GET', DEV_URL, api_key)   #fetch devices info
     device_list = []
-    for device in resp2['items']:   #look for account device
+    for device in http_get['items']:   #look for account device
         device_list.append(device['id']) #put device IDs in device_list array
     found_device = [i for i in device_list if i.startswith('account-')]
     
@@ -1334,7 +1382,7 @@ def config_file(account_type):  #autofill input boxes
 def account_chosen():
     global account_type
 
-    selected = var.get()    #get the value of the radiobutton selected
+    selected = radiobutton_var.get()    #get the value of the radiobutton selected
     if selected == 1:   #convert to assignment by name
         account_type = 'Prod'
     elif selected == 2:
@@ -1373,15 +1421,15 @@ def invalid_login_alert():    #shows error label for two seconds
 def enter_login():
     '''check if API key is valid- if so, store into configparser file and continue'''
     global login 
-    global resp 
+    global http_create
     global api_key
 
     #get api_key from input
     api_key = apikey_input.get()    #get API key from input
 
     #if else statement to test if we can login, otherwise send error and stay at login screen
-    resp = http_requests.http_req('GET', ACC_URL, api_key)  #fetch acc info
-    check = [i for i in resp if isinstance(i, str) and i.startswith('mqttEndpoint')]
+    http_create = http_requests.http_req('GET', ACC_URL, api_key)  #fetch acc info
+    check = [i for i in http_create if isinstance(i, str) and i.startswith('mqttEndpoint')]
     check = str(check)
     check = check.strip("['']") #to be able to use for comparison in if-else statement below
     
@@ -1410,7 +1458,7 @@ def login_screen():
     global data_to_list_key
     global apikey_input
     global data_to_list_api
-    global var
+    global radiobutton_var
 
     login = Toplevel(root, highlightbackground="grey", highlightthickness=3)  #set up login window 
     login.lift() #keep at the top of application
@@ -1457,26 +1505,26 @@ def login_screen():
     step1_label.pack(fill=None, expand=TRUE)
 
     #order: prod, beta, dev, feat
-    var = IntVar()
+    radiobutton_var = IntVar()
     select_frame = Frame(login)
     select_frame.grid(pady=(0,15), column=0, row=3, columnspan=4)
 
-    prod_select = Radiobutton(select_frame, text="Prod", variable=var, value=1, command=account_chosen)
+    prod_select = Radiobutton(select_frame, text="Prod", variable=radiobutton_var, value=1, command=account_chosen)
     prod_select.config(activebackground=myBg, activeforeground='grey', cursor='hand2')
     prod_select.pack(fill=None, expand=FALSE, side=LEFT)
     prod_select.deselect()
 
-    beta_select = Radiobutton(select_frame, text="Beta", variable=var, value=2, command=account_chosen)
+    beta_select = Radiobutton(select_frame, text="Beta", variable=radiobutton_var, value=2, command=account_chosen)
     beta_select.config(activebackground=myBg, activeforeground='grey', cursor='hand2')
     beta_select.pack(padx=15, fill=None, expand=FALSE, side=LEFT)
     beta_select.deselect()
 
-    dev_select = Radiobutton(select_frame, text="Dev", variable=var, value=3, command=account_chosen)
+    dev_select = Radiobutton(select_frame, text="Dev", variable=radiobutton_var, value=3, command=account_chosen)
     dev_select.config(activebackground=myBg, activeforeground='grey', cursor='hand2')
     dev_select.pack(fill=None, expand=FALSE, side=LEFT)
     dev_select.deselect()
 
-    feat_select = Radiobutton(select_frame, text="Feat", variable=var, value=4, command=account_chosen)
+    feat_select = Radiobutton(select_frame, text="Feat", variable=radiobutton_var, value=4, command=account_chosen)
     feat_select.config(activebackground=myBg, activeforeground='grey', cursor='hand2')
     feat_select.pack(padx=(15,0), fill=None, expand=False, side=LEFT)
     feat_select.deselect()  
@@ -1582,8 +1630,8 @@ def doNothing():
 root = Tk() #setup root window
 root.iconbitmap('./nordicicon.ico')
 root.title("nRF Cloud Device Monitor Tool")
-root['background']='#748587'
-root.attributes('-alpha', 0.9)  #make slightly transparent for now
+root['background'] = '#748587'
+root.withdraw()  #hide main screen for now
 
 #set window dimensions
 window_width = 1150
