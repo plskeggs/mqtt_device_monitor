@@ -6,6 +6,7 @@ A .ini file is created to save the valid API keys and certificates.
 '''
 import argparse
 import json
+import time
 from tkinter import ttk
 import paho.mqtt.client as mqtt
 
@@ -38,6 +39,8 @@ data_to_list_api = ['']
 data_to_list_client = ['']
 data_to_list_key = ['']
 subscribed_topics_list = []
+list_to_string = []
+tab3_topic = [] #list to keep track of topics in Treeview in Tab3
 
 client_id = ''
 mqtt_topic_prefix = ''
@@ -50,8 +53,6 @@ certs_flag = None
 client_flag = None
 first_start_flag = 0
 first_start_flag2 = 0
-auto_sub_flag = 0
-j = 0
 
 ACC_URL = 'https://api.nrfcloud.com/v1/account'
 DEV_URL = 'https://api.nrfcloud.com/v1/devices'
@@ -68,27 +69,8 @@ nordic_blue = '#00A9CE'
 nordic_blueslate = '#0033A0'
 nordic_lake = '#0077C8'
 
-'''
-def parse_args():
-    parser = argparse.ArgumentParser(description="Device Credentials Installer",
-                                    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-a", "--apikey", type=str,
-                        help="nRF Cloud account API key",
-                        default=None)
-    parser.add_argument("-v", "--verbose",
-                        help="bool: Make output verbose",
-                        action='store_true', default=False)
-    parser.add_argument("-d", "--deviceid", type=str,
-                        help="Device ID",
-                        default=None)
-    return parser.parse_args()
 
-args = parse_args()
-api_key = args.apikey
-target_device = args.deviceid
-'''
-
-config = configparser.ConfigParser()    #instantiate config parser for login info
+login_config = configparser.ConfigParser()    #instantiate config parser for login info
 topic_config = configparser.ConfigParser(allow_no_value=True)   #config parser for topics
 
 '''Tkinter Shadow Functions'''
@@ -182,7 +164,10 @@ def help_output():
 
 '''MQTT Callbacks'''
 def on_log(client, userdata, level, buf):
+    global log_msg
+
     terminal_print(buf)
+    log_msg = buf
     
 def on_publish(client, userdata, mid):
     '''MQTT published message callback'''
@@ -190,11 +175,16 @@ def on_publish(client, userdata, mid):
 
 def on_message(client, userdata, msg):
     '''MQTT message receive callback'''
-    global curr_msg_topic
 
     #neatly organize the messages and place them in the messages tab and retain them
     curr_msg_topic = msg.topic
-    check_message(msg.payload.decode('utf-8'), curr_msg_topic)
+    try:
+        decoded_msg = msg.payload.decode('utf-8')
+    except Exception as e:
+        print('Cannot decode message: %s' % msg, e)
+    else:
+        check_message(decoded_msg, curr_msg_topic)
+
 
 def on_unsubscribe(client, userdata, mid):
     '''MQTT topic unsubscribe callback'''
@@ -203,13 +193,11 @@ def on_unsubscribe(client, userdata, mid):
 
 def on_subscribe(client, userdata, mid, granted_qos): 
     '''MQTT topic subscribe callback'''
+
     insert_treeview_topic()
 
-    if auto_sub_flag == 1:  #callback is for topics that were automatically subscribed in the beginning
-        return 
-
     tab1_sub_to_topic.delete(0,END) #clear entry box
-    tab1_subscribed_list.insert(END, topic) #add topic to listbox for subscribed topics
+    tab1_subscribed_list.insert(END, address) #add topic to listbox for subscribed topics
 
 def on_connect(client, userdata, flags, rc):
     '''MQTT broker connect callback.'''
@@ -233,17 +221,14 @@ def on_connect(client, userdata, flags, rc):
         print("Bad connection. Returned code = ", rc)
 
 '''My MQTT Actions'''
-def auto_subscribe(value):
+def auto_subscribe(list):
     global auto_sub_flag
     global address
 
-    address = str(value)
-    auto_sub_flag = 1
-    terminal_print("Auto-subscribing to: " + value)
-    client.subscribe(value, qos=0)
-    auto_sub_flag = 0
-
-    tab1_subscribed_list.insert(END, value) #and add to listbox
+    for value in list:
+        address = value
+        terminal_print("Auto-subscribing to: " + value)
+        client.subscribe(value, qos=1)
 
 def do_publish():
     if client_flag == 0:
@@ -260,6 +245,7 @@ def do_publish():
 
 def do_unsubscribe():
     global address
+    global list_to_string
 
     if client_flag == 0:
         terminal_print(text='Please select a target device.')
@@ -267,44 +253,40 @@ def do_unsubscribe():
 
     topic = tab1_sub_to_topic.get() #grab user input from entry box
     address = topics.compare_subs(topic, mqtt_topic_prefix, target_device)
-    client.unsubscribe(address)   #unsubscribe to topic
+
     tab1_sub_to_topic.delete(0,END) #clear entry box
     tab1_subscribed_list.delete(ANCHOR)
 
-    #check if it's in our list of subscribed topics
-    if address in subscribed_topics_list:
+    if address in subscribed_topics_list:   #check if it's in our list of subscribed topics
         subscribed_topics_list.remove(address)  #delete from our subscribed topics list
-        
-        with open('saved_topics.ini', 'r') as topic_configfile:
-            topic_config.read_file(topic_configfile)
+        client.unsubscribe(address)   #unsubscribe to topic
 
-        for key in topic_config[account_type]:    #and delete from file
-            if key == address:
-                topic_config.remove_option(account_type, key)
+        list_to_string = '\n'.join([str(elem) for elem in subscribed_topics_list])  #new list after unsubscribing to a topic     
+            
+        topic_config[account_type][target_device] = list_to_string  #alter file
         with open('saved_topics.ini', 'w') as topic_configfile:
             topic_config.write(topic_configfile)
 
 def do_subscribe(): #client.subscribe() work in here
     global topic
-    global tab1_subscribed_list
     global address
+    global list_to_string
 
     if client_flag == 0:
         terminal_print('Please select a target device.')
         return 
     topic = tab1_sub_to_topic.get() #grab what was typed in the sub_to_topic entry box
     address = topics.compare_subs(topic, mqtt_topic_prefix, target_device) #function to compare topics to get their actual address if selected from listbox
-    terminal_print("Address: " + address)
 
     #check if it's in our list of subscribed topics
     if address not in subscribed_topics_list:   #make sure there's no duplicates
         subscribed_topics_list.append(address)  #add to our subscribed topics list
+        tab1_sub_to_topic.delete(0,END) #clear entry box
+        client.subscribe(address, qos=1)    #subscribe
 
-        client.subscribe(address, qos=0)
+        list_to_string = '\n'.join([str(elem) for elem in subscribed_topics_list])
 
-
-        topic_config[account_type][address] = ''   #and add to file
-        #topic_config[account_type][target_device] = {address}  #use this for  
+        topic_config[account_type][target_device] = list_to_string  #add to file  
         with open('saved_topics.ini', 'w') as topic_configfile:
             topic_config.write(topic_configfile)
     else:
@@ -312,27 +294,52 @@ def do_subscribe(): #client.subscribe() work in here
     
         
 def check_subscribed_topics():
+    topics_to_subscribe = []
+    string_to_list = []
+
     file_exists = os.path.exists('saved_topics.ini')
-    if file_exists is not True:  #create file and add section for subscribed topics
-        topic_config['Prod'] = {}
+    if file_exists is not True:  #create file and add section for devices and subscribed topics for each
+        topic_config['Prod'] = {}  
         topic_config['Beta'] = {}
         topic_config['Dev'] = {}
         topic_config['Feat'] = {}
+
+        devices = [x for x in device_options if not x.startswith('Select')]
+        for i in devices:    #put device under whichever account device was selected at login
+            topic_config[account_type][i] = ''
 
         with open('saved_topics.ini', 'w') as topic_configfile:
             topic_config.write(topic_configfile)
 
     else:   #parse existing file
         topic_config.read('saved_topics.ini')
-        subscribed_topics = topic_config[account_type]
 
-        if subscribed_topics == '': #nothing to subscribe to, move on
+        devices = [x for x in device_options if not x.startswith('Select')]
+        for i in devices:    
+            device_on_file = topic_config.has_option(account_type, i)   #check if devices are already on file, otherwise create them as keys
+            
+            if device_on_file is False: #not on file, make a key for it
+                topic_config[account_type][i] = ''  #put device under whichever account device was selected at login
+            
+            with open('saved_topics.ini', 'w') as topic_configfile:
+                topic_config.write(topic_configfile)
+
+        #if all the devices are already on file then it will go straight to the code below
+        dict_to_list = topic_config.items(account_type, target_device)  #this prints out all [(key, {value})] for the selected account type
+        for key, value in dict_to_list:
+            if key == target_device:     #we only want the value for the selected target_device
+                topics_to_subscribe.append(value)
+                topics_to_subscribe = list(filter(None, topics_to_subscribe))
+
+        if len(topics_to_subscribe) == 0: #nothing to subscribe to, move on
+            print('No subscribed topics.')
             return
         else:
-            for value in topic_config[account_type]:  #for loop to send each topic to subscribe function
-                subscribed_topics_list.append(value)  #also store the topic in a list 
-                auto_subscribe(value)
-                print('subscribed list:', subscribed_topics_list)
+            string_to_list = [x for y in topics_to_subscribe for x in y.split('\n')]
+            for value in string_to_list: 
+                subscribed_topics_list.append(value)  #store in a list of topics we have successfully subscribed to `
+
+            auto_subscribe(subscribed_topics_list)
 
 def pub_message_check(msg): #user custom message
     if msg == '' or msg == '{None}':
@@ -341,18 +348,24 @@ def pub_message_check(msg): #user custom message
         msg = msg
     return msg
 
-def check_message(message, curr_msg_topic):  #function to handle exceptions
-    #print("Raw data: ", message)
-    #print(type(message))
+def check_message(message, curr_msg_topic):  #unpack the message
+    print("Raw data: ", message)
+
     try:
-        unpacked_json = json.loads(message)
+        unpacked_json = json.loads(message)     #try to convert to dict
     except Exception as e:
         print("Couldn't parse raw data: %s" % message, e)
     else:
         print("JSON:", unpacked_json)
+        
+    if isinstance(unpacked_json, dict):   #check if type dict
         sort_message(unpacked_json, curr_msg_topic)
+    elif isinstance(unpacked_json, list):
+        list_to_dict = {k:v for e in unpacked_json for (k,v) in e.items()}
+        print('dsadda: ', type(list_to_dict))
+        sort_message(list_to_dict, curr_msg_topic)
 
-def sort_message(unpacked_json, curr_msg_topic):       
+def sort_message(message, curr_msg_topic):       
     message_array = []
     
     '''
@@ -360,8 +373,9 @@ def sort_message(unpacked_json, curr_msg_topic):
     which message we receive. 
     Error msg: "Caught exception in on_message: 'list' object has no attribute 'items'"
     '''
-
-    for key, value in unpacked_json.items():    #iterate for single key-value pair
+    print('unpacked:', message)
+    print('type2:', type(message))
+    for key, value in message.items():    #iterate for single key-value pair
         if isinstance(value, dict):
             for key2, value2 in value.items():  #iterate for a value with value
                 value2 = str(value2)
@@ -382,9 +396,9 @@ def sort_message(unpacked_json, curr_msg_topic):
         else:
             curr_line = key + ': ' + str(value)
             message_array.append(curr_line)
-    print('\n')
 
     message_array = [x for x in message_array if not x.startswith('lte')]   #just going to completely ignore 'lte' and everything after it for now
+    message_array = [x for x in message_array if not x.startswith('types')]  #and 'types'
     print('message array:', message_array)
     output_messages(message_array, curr_msg_topic)  #pass to function to put into message tab
 
@@ -399,49 +413,22 @@ def sort_message(unpacked_json, curr_msg_topic):
 def insert_treeview_topic():
     global curr_msg_topic
 
-    tab3_topic = [] #list for topics in Treeview in Tab3
     curr_msg_topic = address
-    if topic not in tab3_topic:
-        if topic == None:  #for initial subscriptions in the beginning of program
-            short_topic = '...' + address[-10:]  #only show the last 10 characters of a topic
+    if curr_msg_topic not in tab3_topic:
+        short_topic = '...' + address[-10:]  #only show the last 10 characters of a topic
             
-            tab3_tree.insert("", END, iid=curr_msg_topic, text=short_topic)
-            tab3_topic.append(address)
-            
-            print('1:', tab3_topic)
-            print('address:', address)
-        else:
-
-            short_topic = '...' + address[-10:]
-            tab3_tree.insert("", END, iid=curr_msg_topic, text=short_topic, tags='topic')     #parent
-            tab3_topic.append(topic)
-            
-            print('2:', tab3_topic)
-            print('topic:', topic)
+        tab3_tree.insert("", END, iid=curr_msg_topic, text=short_topic) #create parent section for topic
+        tab3_topic.append(curr_msg_topic)
+    else:
+        return
 
 def output_messages(message_array, curr_msg_topic):
-    count_msg = 1   #start at 1 to account for the blank line
     curr_msg_topic = str(curr_msg_topic)
-    children = tab3_tree.get_children(curr_msg_topic)
-    message_count = len(children)
 
-    print('children: ', children)
-    print('message count1:', message_count)
-
-    if message_count > 20:  #limit 20 messages per topic
-        for record in reversed(children): #reverse, delete oldest record (starting from [0]) and increase all other records by 1
-            oldest_item = tab3_tree.index(record)
-            if record == oldest_item:
-                tab3_tree.delete(record)
-
-            tab3_tree.move(record, tab3_tree.parent(record), tab3_tree.index(record)+1) #move everything else down
-    
-    #insert messages in Treeview in its appropriate topic section
+    #insert new messages in Treeview in its appropriate topic section
     for i in message_array:
         tab3_tree.insert(parent=curr_msg_topic, index=0, values=i, tags='dark')    #child, insert from top
-        count_msg = count_msg + 1
-    print(count_msg)
-
+     
     tab3_tree.insert(parent=curr_msg_topic, index=0, values='', tags='light') #blank line in between chunk of messages
     
 
@@ -508,6 +495,18 @@ def tab1_checkKeyPress(e):
                 data.append(item)
     tab1_update_listBox(data)    #update listbox with selected topics
 
+def reset_device():
+    tab1_subscribed_list.delete(0, END) #empty subscribed topics listbox
+
+    device_info['state'] = NORMAL   
+    device_info.delete(1.0, END)
+    device_info.insert(END, select_message, "align")
+    device_info['state'] = DISABLED 
+
+    #clear messages tab
+    for i in tab3_tree.get_children():
+        tab3_tree.delete(i)
+
 def change_device(*args):
     global target_device
     global device_specifics 
@@ -525,8 +524,10 @@ def change_device(*args):
             device_info.insert(END, select_message, "align")
             device_info['state'] = DISABLED 
             return    #device not selected, do nothing
+
         elif target_device != 'Select Device...':
             pass    #selected a device, continue with bottom code to grab device info 
+
     if client_flag == 1:    #connected to MQTT broker
         if target_device == 'Select Device...': #no device selected
             target_device = None    #disconnect target device and from MQTT broker
@@ -534,20 +535,17 @@ def change_device(*args):
             client.disconnect()
             client.loop_stop()
             if first_start_flag2 == 0:
-                first_start_flag2 = first_start_flag2 + 1
+                first_start_flag2 += 1
                 return 
 
-            device_info['state'] = NORMAL 
-            device_info.delete(1.0, END)
-            device_info.insert(END, select_message, "align")
-            device_info['state'] = DISABLED 
+            reset_device()  #clear messages and subscribed topics
             return 
 
         elif target_device != 'Select Device...':   #switching from one device to another
             client.disconnect() #disconnect from the current device before switching
             client.loop_stop()  #then continue with bottom code
-    #change device details depending on the device selected
-    for device in http_get['items']:
+    
+    for device in http_get['items']:    #change device details depending on the device selected
         if device['id'] == target_device:
             separate = 'T'  #delete T and everything after it, only want the date
             createdDate = device['$meta']['createdAt']
@@ -946,6 +944,7 @@ def create_left_frame(container):
     global device_list
     global device_info
     global select_message
+    global device_options
 
     frame = Frame(container)
     frame.columnconfigure(0, weight=1)      #one column
@@ -1070,18 +1069,18 @@ def main_screen():
         right_frame.config(background=light_grey)
         right_frame.grid(column=1, row=0, sticky=W+E+N+S)
 
-def edit_config_file(flag, data): #store new values into file
+def edit_login_config_file(flag, data): #store new values into file
     if flag == 1:   #store into API
-        config[account_type]['api'] = api_key
+        login_config[account_type]['api'] = api_key
     elif flag == 2: #store into clientCert
-        config[account_type]['clientcert'] = client_cert
+        login_config[account_type]['clientcert'] = client_cert
     elif flag == 3: #store into privKey
-        config[account_type]['privkey'] = priv_key
+        login_config[account_type]['privkey'] = priv_key
     else:
         pass    #do nothing if no input
     
     with open('saved_login.ini', 'w') as configfile:
-            config.write(configfile)    #write changes to file
+            login_config.write(configfile)    #write changes to file
 
 def complete_login():   #save the rest of the login info before moving on to main screen
     global radiobutton_var
@@ -1089,11 +1088,11 @@ def complete_login():   #save the rest of the login info before moving on to mai
     #store valid certificates on configparser file
     if client_cert not in data_to_list_client: #check if client certificate has been saved before
         flag = 2    #store new valid client_cert into configparser file
-        edit_config_file(flag, client_cert)
+        edit_login_config_file(flag, client_cert)
 
     if priv_key not in data_to_list_key: #check if priv_key has been saved before
         flag = 3    #store new valid priv_key into configparser file
-        edit_config_file(flag, priv_key)
+        edit_login_config_file(flag, priv_key)
 
     login.grab_release()    #remove focus
     login.withdraw()    #close login window
@@ -1184,7 +1183,7 @@ def connectMQTT():
     client_id = client_id[:client_id.index('/')]
     client_id = 'account-' + client_id 
 
-    client = mqtt.Client(client_id, clean_session=False)
+    client = mqtt.Client(client_id, clean_session=True)
     client.on_connect = on_connect #bind functions to callback
     client.on_subscribe = on_subscribe
     client.on_publish = on_publish
@@ -1205,11 +1204,11 @@ def do_createAD():
 
     if client_cert not in data_to_list_client: #check if client certificate has been saved before
         flag = 2    #store new valid client_cert into configparser file
-        edit_config_file(flag, client_cert)
+        edit_login_config_file(flag, client_cert)
 
     if priv_key not in data_to_list_key: #check if priv_key has been saved before
         flag = 3    #store new valid api_key into configparser file
-        edit_config_file(flag, priv_key)
+        edit_login_config_file(flag, priv_key)
 
     createAD_to_login() #return back to login window
  
@@ -1348,26 +1347,26 @@ def config_file(account_type):  #autofill input boxes
     file_exists = os.path.exists('saved_login.ini')
     if file_exists is not True:  #create file and add sections with blank values to fill in later
         #build structure
-        config['Prod'] = {'API': '',
+        login_config['Prod'] = {'API': '',
                           'clientCert': '',
                           'privKey': ''}
-        config['Beta'] = {'API': '',
+        login_config['Beta'] = {'API': '',
                           'clientCert': '',
                           'privKey': ''}
-        config['Dev'] = {'API': '',
+        login_config['Dev'] = {'API': '',
                           'clientCert': '',
                           'privKey': ''}
-        config['Feat'] = {'API': '',
+        login_config['Feat'] = {'API': '',
                           'clientCert': '',
                           'privKey': ''}
         with open('saved_login.ini', 'w') as configfile:
-            config.write(configfile)
+            login_config.write(configfile)
 
     else:   #parse existing file
-        config.read('saved_login.ini')
-        api_key = config[account_type]['API']   
-        client_cert = config[account_type]['clientCert']
-        priv_key = config[account_type]['privKey']
+        login_config.read('saved_login.ini')
+        api_key = login_config[account_type]['API']   
+        client_cert = login_config[account_type]['clientCert']
+        priv_key = login_config[account_type]['privKey']
         
         #put values into input boxes 
         clientCert_file_input['values'] += (client_cert,) #add value to combobox list to show in drop down menu
@@ -1438,7 +1437,7 @@ def enter_login():
             pass
         else:   #store new valid api_key into configparser file
             flag = 1
-            edit_config_file(flag, api_key)
+            edit_login_config_file(flag, api_key)
         find_account_device(api_key)   #look for account device
     else:
         invalid_login_alert()
