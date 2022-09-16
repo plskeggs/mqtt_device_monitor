@@ -25,10 +25,6 @@ import event_clicks
 import plots
 import topics
 
-#universal font and background
-myFont = 'Arial'
-myBg = '#333F48'
-
 #these are used to log in
 account_type = '' 
 api_key = ''
@@ -63,11 +59,16 @@ KEEP_ALIVE = 30
 myGrey = '#D9D9D9'  #even lighter grey
 lighter_grey = '#D3D3D3'    #this is darker than myGrey
 light_grey = '#ECEFF1'
-middle_grey = '768692'
+middle_grey = '#768692'
 dark_grey = '#333F48'
 nordic_blue = '#00A9CE'
 nordic_blueslate = '#0033A0'
 nordic_lake = '#0077C8'
+left_widgets_color = '#6a8c99'
+
+#universal font and background
+myFont = 'Arial'
+myBg = dark_grey
 
 
 login_config = configparser.ConfigParser()    #instantiate config parser for login info
@@ -115,6 +116,12 @@ def enter_login_press(event):   #for login screen
 def terminal_enter_event(e):
     terminal_enter()
 
+def terminal_reset():
+    terminal_list['state'] = NORMAL 
+    terminal_print("Welcome! Select a device to get started.")  #first line in terminal
+    terminal_print("Type /help for more information.")
+    terminal_list['state'] = DISABLED
+
 def terminal_clear():   #clear terminal output and entry box
     terminal_list['state'] = NORMAL 
     terminal_input.delete(0, END)
@@ -131,14 +138,18 @@ def terminal_enter():
         terminal_list['state'] = DISABLED
 
     terminal_list['state'] = NORMAL 
+
     if user_input == '/help':
         help_output()
     elif user_input == '-v':
         terminal_list.insert(END, 'Python Version 3.10.6\n')
-        terminal_list.insert(END, 'Developed SUMMER 2022\n')
+        terminal_list.insert(END, 'Developed SUMMER 2022\n\n')
     elif user_input == '-acc':
-        #terminal_list.insert(END, ) 
-        pass
+        terminal_list.insert(END, 'MQTT Endpoint: ' + mqtt_endpoint + '\n') 
+        terminal_list.insert(END, 'MQTT Topic Prefix: ' + mqtt_topic_prefix + '\n')
+        terminal_list.insert(END, 'MQTT Client ID: ' + client_id + '\n\n')  
+    else:
+        pass    #do nothing
 
     terminal_input.delete(0, END) #clear entry box
     terminal_list['state'] = DISABLED
@@ -154,8 +165,6 @@ def help_output():
     help_list = ['\n----------------------------------------',
                  '  -v              program version',
                  '  -acc        account information',
-                 '  -dev        device information',
-                 '  -add more stuff later',
                  '----------------------------------------'
                 ]
     for i in help_list:
@@ -332,7 +341,6 @@ def check_subscribed_topics():
                 topics_to_subscribe = list(filter(None, topics_to_subscribe))
 
         if len(topics_to_subscribe) == 0: #nothing to subscribe to, move on
-            print('No subscribed topics.')
             return
         else:
             string_to_list = [x for y in topics_to_subscribe for x in y.split('\n')]
@@ -349,32 +357,22 @@ def pub_message_check(msg): #user custom message
     return msg
 
 def check_message(message, curr_msg_topic):  #unpack the message
-    print("Raw data: ", message)
-
     try:
         unpacked_json = json.loads(message)     #try to convert to dict
     except Exception as e:
         print("Couldn't parse raw data: %s" % message, e)
     else:
-        print("JSON:", unpacked_json)
+        pass
         
     if isinstance(unpacked_json, dict):   #check if type dict
         sort_message(unpacked_json, curr_msg_topic)
     elif isinstance(unpacked_json, list):
         list_to_dict = {k:v for e in unpacked_json for (k,v) in e.items()}
-        print('dsadda: ', type(list_to_dict))
         sort_message(list_to_dict, curr_msg_topic)
 
 def sort_message(message, curr_msg_topic):       
     message_array = []
-    
-    '''
-    The for-loop below used to work without issues, but now it's giving an error depending on
-    which message we receive. 
-    Error msg: "Caught exception in on_message: 'list' object has no attribute 'items'"
-    '''
-    print('unpacked:', message)
-    print('type2:', type(message))
+
     for key, value in message.items():    #iterate for single key-value pair
         if isinstance(value, dict):
             for key2, value2 in value.items():  #iterate for a value with value
@@ -384,13 +382,11 @@ def sort_message(message, curr_msg_topic):
                 #Unable to pick "lte" apart
                 if isinstance(value2, dict):
                     for key3, value3 in value2.items():  #iterate for a value with a value with value
-                        print('third iteration: ', key3, ':', value3)
                         value3 = str(value3)
                         value3 = value3.strip('{}')
                         curr_line = key3 + ':' + str(value3)
                         message_array.append(curr_line)
                 else:
-                    print("is instance 2: {0} : {1}".format(key2, value2))
                     curr_line = key2 + ':' + str(value2)
                     message_array.append(curr_line)    
         else:
@@ -399,17 +395,23 @@ def sort_message(message, curr_msg_topic):
 
     message_array = [x for x in message_array if not x.startswith('lte')]   #just going to completely ignore 'lte' and everything after it for now
     message_array = [x for x in message_array if not x.startswith('types')]  #and 'types'
-    print('message array:', message_array)
+    
     output_messages(message_array, curr_msg_topic)  #pass to function to put into message tab
 
-    
-    #plot for "activity"? Everytime we go through here, put a point on the plot vs. time
-    #Also read message array here to pull out whatever data we need to plot on the graph vs time
-    #i.e. if "voltage" exists in the array, find the key "data" and grab that value out to plot (send to plots.py)
-    #for key "appId" = RSRP value, get value of key "data"
-    #or              = VOLTAGE, get value of key "data" 
-
-
+    for k, v in message.items():    #find the data type we want
+        if k == 'appId' and v == 'RSRP':
+            for k, v in message.items():    #go through list again to find exact data value
+                if k =='data':
+                    plots.get_data1(v) #send value to function to store in plot array
+        elif k == 'appId' and v == 'BUTTON':
+            for k, v in message.items():   
+                if k =='data':
+                    plots.get_data2(v)
+        else:   #none of the two above included in message, then send 0
+            no_data = 0
+            plots.get_data1(no_data)
+            plots.get_data2(no_data)
+            
 def insert_treeview_topic():
     global curr_msg_topic
 
@@ -503,9 +505,10 @@ def reset_device():
     device_info.insert(END, select_message, "align")
     device_info['state'] = DISABLED 
 
-    #clear messages tab
-    for i in tab3_tree.get_children():
+    for i in tab3_tree.get_children():  #clear messages tab
         tab3_tree.delete(i)
+    tab3_topic.clear()    #clear treeview topics list
+
 
 def change_device(*args):
     global target_device
@@ -544,7 +547,8 @@ def change_device(*args):
         elif target_device != 'Select Device...':   #switching from one device to another
             client.disconnect() #disconnect from the current device before switching
             client.loop_stop()  #then continue with bottom code
-    
+            reset_device()  #clear messages and subscribed topics
+
     for device in http_get['items']:    #change device details depending on the device selected
         if device['id'] == target_device:
             separate = 'T'  #delete T and everything after it, only want the date
@@ -688,7 +692,7 @@ def tab2_layout(tab2):
     tab2_update_listBox(pub_topic_list)  #add topics to our list
     tab2_listBox.bind("<<ListboxSelect>>", tab2_fillOut)  #create a binding on the listbox onclick
 
-    tab2_help = Label(tab2, text="[ Help ]", background='#80AABA', foreground='white')
+    tab2_help = Label(tab2, text="[ Help ]", background='#5595AD', foreground='white')
     tab2_help.config(font=(myFont, 12), borderwidth=1, relief='raised', anchor=CENTER, justify=LEFT)
     tab2_help.grid(column=0, row=3, padx=(40,0), pady=(5,15), ipadx=2, sticky=N+S)
     ToolTip(tab2_help, msg='Click on a topic and a message\nabove to auto-fill or manually\ntype into the textbox.',
@@ -977,15 +981,15 @@ def create_left_frame(container):
     select_device_frame.grid(column=0, row=0, padx=10, pady=(10,0), sticky=W+E+N+S)
 
     select_device = OptionMenu(select_device_frame, device_list, *device_options)  #dropdown menu
-    select_device.config(font=(myFont, 12), background=nordic_blue, foreground='white')
-    select_device['menu'].configure(bg='#d6d6d6', bd=0, font=(myFont, 12))
+    select_device.config(font=(myFont, 12), background=nordic_blue, foreground='white', activebackground=middle_grey)
+    select_device['menu'].configure(bg='#d6d6d6', activebackground=middle_grey, bd=0, font=(myFont, 12))
     select_device.pack(fill=BOTH, expand=TRUE)
 
     #(0,1) below that, account and device information
-    device_info_frame = Frame(frame, background='#0f5d73', borderwidth=2, relief=RAISED)
-    device_info_frame.grid(column=0, row=1, rowspan=2, padx=(30,20), pady=(0,10))
+    device_info_frame = Frame(frame, background=left_widgets_color, borderwidth=2, relief=RAISED)
+    device_info_frame.grid(column=0, row=1, rowspan=2, padx=(30,20), pady=(0,5))
 
-    device_info = Text(device_info_frame, background='#0f5d73', foreground='white', width=25, height=7, wrap=WORD)
+    device_info = Text(device_info_frame, background=left_widgets_color, foreground='white', width=25, height=7, wrap=WORD)
     device_info.config(highlightthickness=0, borderwidth=0, font=(myFont, 10), spacing1=5, spacing2=2, spacing3=2)
     device_info.pack(padx=15, pady=(7,3), fill=BOTH, expand=TRUE)
     device_info.tag_configure("align", justify='center')
@@ -996,10 +1000,10 @@ def create_left_frame(container):
     device_info['state'] = DISABLED
 
     #(0,3) mqtt user information
-    mqtt_info_frame = Frame(frame, borderwidth=2, relief=RAISED, background='#186e99')
+    mqtt_info_frame = Frame(frame, borderwidth=2, relief=RAISED, background=left_widgets_color)
     mqtt_info_frame.grid(column=0, row=3, rowspan=3, padx=(30,20))
     
-    mqtt_info = Text(mqtt_info_frame, background='#186e99', foreground='white', width=25, height=10, wrap=CHAR)
+    mqtt_info = Text(mqtt_info_frame, background=left_widgets_color, foreground='white', width=25, height=10, wrap=CHAR)
     mqtt_info.config(highlightthickness=0, borderwidth=0, font=(myFont, 10), spacing1=5, spacing2=2, spacing3=2)
     mqtt_info.pack(padx=15, pady=(10,10), fill=BOTH, expand=TRUE)
     mqtt_info.tag_configure("align", justify='center')      #configure tags
@@ -1023,10 +1027,10 @@ def create_left_frame(container):
     mqtt_info['state'] = DISABLED
 
     #(0,4) show account type
-    account_type_frame = Frame(frame, borderwidth=2, relief=RAISED, background='#298b9e')
+    account_type_frame = Frame(frame, borderwidth=2, relief=RAISED, background=left_widgets_color)
     account_type_frame.grid(column=0, row=6, padx=(30,20))
 
-    account_type_text = Text(account_type_frame, background='#298b9e', foreground='white', width=25, height=2, wrap=CHAR)
+    account_type_text = Text(account_type_frame, background=left_widgets_color, foreground='white', width=25, height=2, wrap=CHAR)
     account_type_text.config(highlightthickness=0, borderwidth=0, font=(myFont, 10), spacing1=5, spacing2=2, spacing3=2)
     account_type_text.pack(padx=15, pady=7, fill=BOTH, expand=TRUE)
     account_type_text.tag_configure("align", justify='center')  #configure tags
@@ -1099,6 +1103,13 @@ def complete_login():   #save the rest of the login info before moving on to mai
     main_screen()   #continue with main screen program
 
 def reset_program():
+    global client_flag
+
+    if client_flag ==1: #disconnect from mqtt broker
+        client.disconnect()
+        client.loop_stop()
+        client_flag = 0
+
     device_list.set("Select Device...")  #reset target_device
 
     device_info['state'] = NORMAL   #reset device info textbox
@@ -1108,18 +1119,18 @@ def reset_program():
 
     tab1_subscribed_list.delete(0, END) #empty subscribed topics listbox
 
-    #clear messages tab
-    for i in tab3_tree.get_children():
+    for i in tab3_tree.get_children():  #clear messages tab
         tab3_tree.delete(i)
+    tab3_topic.clear()    #clear treeview topics list
+
+    terminal_clear()    
+    terminal_reset()    #reset terminal to how it was in the start
 
 def popupLogin():
     reset_program()
     logOff.withdraw()   #hide prior window
     root.withdraw() #hide main window
 
-    if client_flag ==1:
-        client.disconnect()
-        client.loop_stop()
     root.withdraw()  #hide main screen
     login.deiconify()   #show login screen
     login.grab_set()    #disable main screen, focus on login
@@ -1443,7 +1454,8 @@ def enter_login():
         invalid_login_alert()
 
 def exit_login():
-    root.destroy()  #close program
+    root.destroy()  #terminate main loop and destroy all widgets
+    root.quit()     #quit the application
 
 def login_screen():
     '''Login Frame'''
