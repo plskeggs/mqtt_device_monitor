@@ -625,9 +625,9 @@ def tab3_layout(tab3):
     tab3_layout_right.rowconfigure(1, weight=1, uniform=1)
 
     #function for plot1
-    plots.graph1(tab3_layout_right)
+    plots.graph_rsrp(tab3_layout_right)
     #function for plot2
-    plots.graph2(tab3_layout_right)
+    plots.graph_button(tab3_layout_right)
     
     '''   DETAILS
     Treeview widget on left side of frame
