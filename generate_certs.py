@@ -36,9 +36,14 @@ def write_file(pathname, filename, string):
     f.close()
     return
 
-def create_device(account_type, api_key, client_cert, priv_key):
-   
-    create_dev_cert = http_requests.http_req('POST', devCert_URL, api_key)  #create uses 'POST'
+def create_device(account_type, api_key, client_cert, priv_key, http_req_flag):
+    http_req_flag = ''
+    create_dev_cert = http_requests.http_req('POST', devCert_URL, api_key, http_req_flag)  #create uses 'POST'
+    
+    if http_req_flag != '':   #there was an error, send error type back to main
+        return http_req_flag 
+        
+
     keyOnly = create_dev_cert['privateKey']
     caOnly = create_dev_cert['caCert']
     clientOnly = create_dev_cert['clientCert']

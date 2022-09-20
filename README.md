@@ -1,8 +1,9 @@
-# mqtt_device_monitor
-Python GUI program for monitoring and interacting with nRF Cloud devices over MQTT.
+# nRF Cloud Device Monitor Tool  
+
+### Application that monitors device activity in a user's account from nRF Cloud. Connects to nRF Cloud to access virtual device (aka account device) and uses MQTT connection to subscribe/publish to topics and receive messages. (add more later)  
 
 ## Required Packages 
 
-#### pip install paho-mqtt  
-#### pip install tkinter-tooltip  
+#### pip install -U paho-mqtt  
+#### pip install -U tkinter-tooltip  
 #### pip install -U matplotlib

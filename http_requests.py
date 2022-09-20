@@ -2,37 +2,28 @@
 
 import requests
 
-def http_req(token, req_url, req_api_key):
+def http_req(token, req_url, req_api_key, http_req_flag):
     '''List or create account device certificates'''
+    auth_hdr = {'Authorization': 'Bearer ' + req_api_key}
+
     try:
         if token == 'POST': #create new acc dev/certs
-            resp = requests.post(req_url, headers={'Authorization': 'Bearer ' + req_api_key})
+            resp = requests.post(req_url, headers=auth_hdr)
         elif token == 'GET':    #fetch info
-            resp = requests.get(req_url, headers={'Authorization': 'Bearer ' + req_api_key})
+            resp = requests.get(req_url, headers=auth_hdr)
     except requests.RequestException:
-        print('Request Exception')
+        return http_req_flag == 'requestException'
     except requests.ConnectionError:
-        print('Connection Error')
+        return http_req_flag == 'connectionError'
     except requests.HTTPError:
-        print('HTTP Error')
+        return http_req_flag == 'HTTPError'
     except requests.TooManyRedirects:
-        print('Too many redirects')
+        return http_req_flag == 'manyRedirects'
     except requests.ConnectTimeout:
-        print('Connect Timeout')
+        return http_req_flag == 'connectTimeout'
     except requests.ReadTimeout:
-        print('Read Timeout')
+        return http_req_flag == 'readTimeout'
     except requests.Timeout:
-        print('Timeout')
-    '''
-    if token == 'POST' and resp.status_code != 201: #201 means successfully created account device + certs
-        print('Error code: ' + str(resp.status_code))
-    else:
-        #print('Created account device.')
-        pass
-    if token == 'GET' and resp.status_code != 200:  #200 means successfully obtained info
-        print('Error code: ' + str(resp.status_code))
-    else:
-        #print('Request successfully made!')
-        pass
-    '''
+        return http_req_flag == 'timeout'
+
     return resp.json()
