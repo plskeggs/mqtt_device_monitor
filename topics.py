@@ -1,3 +1,4 @@
+
 def compare_pubs(topic, mqtt_topic_prefix, target_device):
     if topic == '{device_id}/shadow/get/accepted':
         topic = target_device +'/shadow/get/accepted'
@@ -37,3 +38,37 @@ def compare_subs(topic, mqtt_topic_prefix, target_device):
     else:
         topic = topic #user custom input
     return topic
+
+def topics_to_pub(topic_list):
+    #create list of "Publish" topics to insert into Listbox
+    topic_list = [
+        '{device_id}/shadow/get/accepted',
+        '$aws/things/{device_id}/shadow/get/rejected',
+        '$aws/things/{device_id}/shadow/update/delta',
+        '{mqtt_topic_prefix}/m/d/{device_id}/c2d',
+        '{mqtt_topic_prefix}/{device_id}/jobs/rcv',
+        'm/#',
+        'a/connections'
+    ]
+    return topic_list
+
+def topics_to_sub(topic_list): 
+    #create list of "Subscribe" topics to insert into Listbox
+    topic_list = [
+        '$aws/things/{device_id}/shadow/get',
+        '$aws/things/{device_id}/shadow/update',
+        '{mqtt_topic_prefix}/m/d/{device_id}/d2c',
+        '{mqtt_topic_prefix}/m/d/{device_id}/d2c/bulk',
+        '{mqtt_topic_prefix}/{device_id}/jobs/req',
+        '{mqtt_topic_prefix}/{device_id}/jobs/update',
+        '{mqtt_topic_prefix}/m/#'
+        ]
+    return topic_list 
+
+def messages_to_pub(message_options):
+    #create list of messages to insert into Listbox
+    message_options = [
+        '{appId:Type}',
+        '{None}'
+    ]
+    return message_options

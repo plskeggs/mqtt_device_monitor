@@ -6,6 +6,7 @@ import matplotlib.animation as animation
 from matplotlib import style
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg 
 
+nordic_blue = '#00A9CE'
 
 data_rsrp = []
 data_button = []
@@ -57,7 +58,7 @@ def graph_rsrp(tab3_layout_right):
     ax1.set_title("Reference Signal Received Power")
     ax1.set_ylim(-100,20)
     ax1.set_ylabel("RSRP (dBm)")
-    line1, = ax1.plot(xar1, yar1, 'g', marker='o')
+    line1, = ax1.plot(xar1, yar1, nordic_blue, marker='o')
 
     plotcanvas1 = FigureCanvasTkAgg(fig1, tab3_layout_right)
     plotcanvas1.get_tk_widget().grid(column=0, row=0, padx=5, pady=(5), sticky=W+E+N+S)
@@ -81,7 +82,7 @@ def graph_button(tab3_layout_right):
     ax2.set_title("Button")
     ax2.set_ylim(0, 2.5)
     ax2.set_ylabel("Data")
-    line2, = ax2.plot(xar2, yar2, 'g', marker='o')
+    line2, = ax2.plot(xar2, yar2, nordic_blue, marker='o')
 
     plotcanvas2 = FigureCanvasTkAgg(fig2, tab3_layout_right)
     plotcanvas2.get_tk_widget().grid(column=0, row=1, padx=5, pady=(0,5), sticky=W+E+N+S)
