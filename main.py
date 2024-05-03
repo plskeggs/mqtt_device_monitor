@@ -248,7 +248,9 @@ def do_publish():
     user_msg = tab2_msg_input.get()    #grab what was in the msg entry textbox
     msg_to_pub = pub_message_check(user_msg)
 
-    client.publish(topic=address, payload=json.dumps(msg_to_pub), qos=0, retain=True) #publish message to topic 
+    terminal_print(msg_to_pub)
+    ret = client.publish(topic=address, payload=msg_to_pub, qos=0, retain=True) #publish message to topic 
+    terminal_print("rc:{}, mid:{}, is_published:{}".format(ret.rc, ret.mid, ret.is_published))
     tab2_topic_input.delete(0,END)  #clear entry box
     tab2_msg_input.delete(0,END) #clear entry box
 
@@ -554,12 +556,16 @@ def change_device(*args):
             separate = 'T'  #delete T and everything after it, only want the date
             createdDate = device['$meta']['createdAt']
             createdDate = createdDate.split(separate, 1)[0]
+            try:
+                version = device['$meta']['version']
+            except:
+                version = 'unknown'
             device_specifics = ['Dev ID: ' + device['id'],                           
                                 #'Dev Name: ' + device['name'],
                                 'Type: ' + device['type'],
                                 'Subtype: ' + device['subType'],
                                 'Created On: ' + createdDate,
-                                'Version: ' + device['$meta']['version']
+                                'Version: ' + version
                                 ]
     devText = '\n'.join(device_specifics)
 
@@ -1211,6 +1217,7 @@ def connectMQTT():
     client_flag = 1     #and also to determine if certificates were valid
 
 def do_createAD():
+    print("api_key:{}".format(api_key))
     generate_certs.create_device(account_type, api_key, client_cert, priv_key)   #create acc dev and certs
 
     if client_cert not in data_to_list_client: #check if client certificate has been saved before

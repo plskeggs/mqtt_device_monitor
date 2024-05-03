@@ -9,6 +9,7 @@ def http_req(token, req_url, req_api_key):
             resp = requests.post(req_url, headers={'Authorization': 'Bearer ' + req_api_key})
         elif token == 'GET':    #fetch info
             resp = requests.get(req_url, headers={'Authorization': 'Bearer ' + req_api_key})
+        return resp.json()
     except requests.RequestException:
         print('Request Exception')
     except requests.ConnectionError:
@@ -35,4 +36,4 @@ def http_req(token, req_url, req_api_key):
         #print('Request successfully made!')
         pass
     '''
-    return resp.json()
+    return None
