@@ -1,12 +1,5 @@
-'''
-Login screen verifies if API key is valid and proceeds to connect
-to MQTT broker with client certificate and private key.
-A .ini file is created to save the valid API keys and certificates.
 
-'''
-import argparse
 import json
-import time
 from tkinter import ttk
 import paho.mqtt.client as mqtt
 
@@ -24,6 +17,9 @@ import themes
 import event_clicks
 import plots
 import topics
+import terminal
+
+
 
 #these are used to log in
 account_type = '' 
@@ -52,19 +48,27 @@ first_start_flag2 = 0
 
 ACC_URL = 'https://api.nrfcloud.com/v1/account'
 DEV_URL = 'https://api.nrfcloud.com/v1/devices'
-AUTH_BEARER_PREFIX = 'Bearer '
 PORT = 8883
 KEEP_ALIVE = 30
 
-myGrey = '#D9D9D9'  #even lighter grey
-lighter_grey = '#D3D3D3'    #this is darker than myGrey
-light_grey = '#ECEFF1'
-middle_grey = '#768692'
-dark_grey = '#333F48'
-nordic_blue = '#00A9CE'
-nordic_blueslate = '#0033A0'
-nordic_lake = '#0077C8'
-left_widgets_color = '#6a8c99'
+myGrey =                '#D9D9D9'    #even lighter grey
+lighter_grey =          '#D3D3D3'    #this is darker than myGrey
+light_grey =            '#ECEFF1'
+middle_grey =           '#768692'
+dark_grey =             '#333F48'
+nordic_blue =           '#00A9CE'
+nordic_blueslate =      '#0033A0'
+nordic_lake =           '#0077C8'
+
+left_widgets_color =    '#6a8c99'
+dropdown_menu_bg =      '#d6d6d6'
+tooltip_bg =            '#AEDAEB'
+error_red_font_color =  '#e30202'
+main_logoff_color =     '#505f63'
+button_press_color =    '#9ed3e8'
+terminal_input_bg =     '#e0dede'
+listbox_select_bg =     '#737c7d'
+tab2_tooltip_bg =       '#AEDAEB'
 
 #universal font and background
 myFont = 'Arial'
@@ -74,7 +78,7 @@ myBg = dark_grey
 login_config = configparser.ConfigParser()    #instantiate config parser for login info
 topic_config = configparser.ConfigParser(allow_no_value=True)   #config parser for topics
 
-'''Tkinter Shadow Functions'''
+#Tkinter Shadow Functions
 #whenever input boxes are modified, go to event_clicks to do work
 def tab2_on_entry_click_left(event):
     event_clicks.tab2_remove_shadow_text_left(tab2_topic_input)
@@ -96,6 +100,7 @@ def tab1_entry_focus_out(event):
 
 #interactive events customizations
 def button_config(button):
+    button.configure(activeforeground='white', activebackground=button_press_color)
     button.bind("<Enter>", button_hover)
     button.bind("<Leave>", button_hover_leave)
 
@@ -114,76 +119,21 @@ def enter_login_press(event):   #for login screen
     enter_login() #pass onto function as if the 'Enter' button was clicked
 
 def terminal_enter_event(e):
-    terminal_enter()
+    terminal.terminal_enter()
 
-def terminal_reset():
-    terminal_list['state'] = NORMAL 
-    terminal_print("Welcome! Select a device to get started.")  #first line in terminal
-    terminal_print("Type /help for more information.")
-    terminal_list['state'] = DISABLED
-
-def terminal_clear():   #clear terminal output and entry box
-    terminal_list['state'] = NORMAL 
-    terminal_input.delete(0, END)
-    terminal_list.delete(1.0, END)
-    terminal_list['state'] = DISABLED
-
-def terminal_enter():    
-    user_input = terminal_input.get()
-    if user_input == '':    #nothing typed in, do nothing
-        return 
-    else:
-        terminal_list['state'] = NORMAL
-        terminal_print(user_input)  #output user input on terminal 
-        terminal_list['state'] = DISABLED
-
-    terminal_list['state'] = NORMAL 
-
-    if user_input == '/help':
-        help_output()
-    elif user_input == '-v':
-        terminal_list.insert(END, 'Python Version 3.10.6\n')
-        terminal_list.insert(END, 'Developed SUMMER 2022\n\n')
-    elif user_input == '-acc':
-        terminal_list.insert(END, 'MQTT Endpoint: ' + mqtt_endpoint + '\n') 
-        terminal_list.insert(END, 'MQTT Topic Prefix: ' + mqtt_topic_prefix + '\n')
-        terminal_list.insert(END, 'MQTT Client ID: ' + client_id + '\n\n')  
-    else:
-        pass    #do nothing
-
-    terminal_input.delete(0, END) #clear entry box
-    terminal_list['state'] = DISABLED
-
-def terminal_print(text):   #terminal output
-    terminal_list['state'] = NORMAL
-    text_format = ' >> ' + text 
-    terminal_list.insert(END, text_format + '\n') #insert at the bottom 
-    terminal_list.yview(END)    #move scrollbar along with text
-    terminal_list['state'] = DISABLED
-
-def help_output():
-    help_list = ['\n----------------------------------------',
-                 '  -v              program version',
-                 '  -acc        account information',
-                 '----------------------------------------'
-                ]
-    for i in help_list:
-        terminal_list.insert(END, i + '\n')
-        terminal_list.yview(END)
-
-'''MQTT Callbacks'''
+#MQTT Callbacks
 def on_log(client, userdata, level, buf):
     global log_msg
 
-    terminal_print(buf)
+    terminal.terminal_print(buf)
     log_msg = buf
     
 def on_publish(client, userdata, mid):
-    '''MQTT published message callback'''
-    terminal_print(str(mid))
+    #MQTT published message callback
+    terminal.terminal_print(str(mid))
 
 def on_message(client, userdata, msg):
-    '''MQTT message receive callback'''
+    #MQTT message receive callback
 
     #neatly organize the messages and place them in the messages tab and retain them
     curr_msg_topic = msg.topic
@@ -194,14 +144,13 @@ def on_message(client, userdata, msg):
     else:
         check_message(decoded_msg, curr_msg_topic)
 
-
 def on_unsubscribe(client, userdata, mid):
-    '''MQTT topic unsubscribe callback'''
+    #MQTT topic unsubscribe callback
     pass 
     #print('\nUnsubscribed.', mid)
 
 def on_subscribe(client, userdata, mid, granted_qos): 
-    '''MQTT topic subscribe callback'''
+    #MQTT topic subscribe callback
 
     insert_treeview_topic()
 
@@ -209,15 +158,16 @@ def on_subscribe(client, userdata, mid, granted_qos):
     tab1_subscribed_list.insert(END, address) #add topic to listbox for subscribed topics
 
 def on_connect(client, userdata, flags, rc):
-    '''MQTT broker connect callback.'''
+    #MQTT broker connect callback
     global subscribed_topics_list
 
     if rc == mqtt.CONNACK_ACCEPTED:
         client.connected_flag = True 
     
-        '''If the program reconnects by itself, we need to unsubscribe from all topics and re-subscribe to them
-        after. This means we need to clear our list array that holds the subscribed topics but keep the 
-        config parser file to remember what to subscribe back to.'''
+        #If the program reconnects by itself, we need to unsubscribe from all topics and re-subscribe to them
+        #after. This means we need to clear our list array that holds the subscribed topics but keep the 
+        #config parser file to remember what to subscribe back to.
+
         if subscribed_topics_list:  #if not empty
             for topic in subscribed_topics_list:
                 client.unsubscribe(topic)    #unsubcribe from all subscribed topics
@@ -229,19 +179,18 @@ def on_connect(client, userdata, flags, rc):
     else:
         print("Bad connection. Returned code = ", rc)
 
-'''My MQTT Actions'''
+#My MQTT actions
 def auto_subscribe(list):
-    global auto_sub_flag
     global address
 
     for value in list:
         address = value
-        terminal_print("Auto-subscribing to: " + value)
+        terminal.terminal_print("Auto-subscribing to: " + value)
         client.subscribe(value, qos=1)
 
 def do_publish():
     if client_flag == 0:
-        terminal_print('Please select a target device.')
+        terminal.terminal_print('Please select a target device.')
         return  
     topic = tab2_topic_input.get() #grab what was in topic entry textbox
     address = topics.compare_pubs(topic, mqtt_topic_prefix, target_device)   #obtain address of topic
@@ -259,7 +208,7 @@ def do_unsubscribe():
     global list_to_string
 
     if client_flag == 0:
-        terminal_print(text='Please select a target device.')
+        terminal.terminal_print(text='Please select a target device.')
         return
 
     topic = tab1_sub_to_topic.get() #grab user input from entry box
@@ -284,7 +233,7 @@ def do_subscribe(): #client.subscribe() work in here
     global list_to_string
 
     if client_flag == 0:
-        terminal_print('Please select a target device.')
+        terminal.terminal_print('Please select a target device.')
         return 
     topic = tab1_sub_to_topic.get() #grab what was typed in the sub_to_topic entry box
     address = topics.compare_subs(topic, mqtt_topic_prefix, target_device) #function to compare topics to get their actual address if selected from listbox
@@ -301,7 +250,7 @@ def do_subscribe(): #client.subscribe() work in here
         with open('saved_topics.ini', 'w') as topic_configfile:
             topic_config.write(topic_configfile)
     else:
-        terminal_print('Already subscribed to topic.')
+        terminal.terminal_print('Already subscribed to topic.')
     
         
 def check_subscribed_topics():
@@ -404,16 +353,16 @@ def sort_message(message, curr_msg_topic):
         if k == 'appId' and v == 'RSRP':
             for k, v in message.items():    #go through list again to find exact data value
                 if k =='data':
-                    plots.get_data1(v) #send value to function to store in plot array
+                    plots.get_data_rsrp(v) #send value to function to store in plot array
         elif k == 'appId' and v == 'BUTTON':
             for k, v in message.items():   
                 if k =='data':
-                    plots.get_data2(v)
+                    plots.get_data_button(v)
         else:   #none of the two above included in message, then send 0
             no_data = 0
-            plots.get_data1(no_data)
-            plots.get_data2(no_data)
-            
+            plots.get_data_rsrp(no_data)
+            plots.get_data_button(no_data)
+
 def insert_treeview_topic():
     global curr_msg_topic
 
@@ -436,7 +385,7 @@ def output_messages(message_array, curr_msg_topic):
     tab3_tree.insert(parent=curr_msg_topic, index=0, values='', tags='light') #blank line in between chunk of messages
     
 
-'''Tab 2 Stuff'''
+#Tab 2 actions: clear/update listboxes and entry boxes
 def tab2_update_msgBox(data):   #add list of messages into box
     tab2_messages_list.delete(0,END)
     for item in data:
@@ -463,7 +412,7 @@ def tab2_fillOut(e):
     tab2_topic_input.insert(0, tab2_listBox.get(ANCHOR))  #add clicked list item to listbox
     tab2_topic_input.config(fg='black')
 
-'''Tab 1 Stuff'''
+#Tab 1 actions: clear/update listboxes and entry boxes
 def do_clear():
     tab1_sub_to_topic.delete(0,END)
     event_clicks.tab1_insert_shadow_text(tab1_sub_to_topic) #insert shadow text
@@ -510,7 +459,6 @@ def reset_device():
     for i in tab3_tree.get_children():  #clear messages tab
         tab3_tree.delete(i)
     tab3_topic.clear()    #clear treeview topics list
-
 
 def change_device(*args):
     global target_device
@@ -561,7 +509,6 @@ def change_device(*args):
             except:
                 version = 'unknown'
             device_specifics = ['Dev ID: ' + device['id'],                           
-                                #'Dev Name: ' + device['name'],
                                 'Type: ' + device['type'],
                                 'Subtype: ' + device['subType'],
                                 'Created On: ' + createdDate,
@@ -622,18 +569,17 @@ def tab3_layout(tab3):
     tab3_layout_right.rowconfigure(1, weight=1, uniform=1)
 
     #function for plot1
-    plots.graph1(tab3_layout_right)
+    plots.graph_rsrp(tab3_layout_right)
     #function for plot2
-    plots.graph2(tab3_layout_right)
+    plots.graph_button(tab3_layout_right)
     
-
-    '''   DETAILS
-    Treeview widget on left side of frame
-    -Depending on which topic is expanded:
+    #   TAB 3 DETAILS
+    #Treeview widget on left side of frame
+    #-Depending on which topic is expanded:
     # (1) parent: topic 
     # (1) first child: most recent message
         # and the details
-        # color code each one 
+        # color code each one  -- NOT DONE
     # (1) second child: attach a "link" that opens up a pop-up listing all messages with scrollbar 
     # save messages to a .txt file or something, cap at (50)msgs 
     
@@ -645,19 +591,17 @@ def tab3_layout(tab3):
     # we just need one function to create parents and its children - just iterate when
     # subscribing to topic/remove when unsubscribing
 
-    The right side will include graphs/visuals?
-    For the plot:
+    #The right side will include graphs/visuals?
+    #For the plot:
     # retrieve message
     # grab the specific data value
     # update data with line.set_data()
-    # update canvas with canvas.draw()
 
     # remember subscribed topics so when we select a device, we automatically subscribe to them again
     # save to .txt file 
     # write a new function that will read from that file every time we select a device
-    # to check if there are any topics we were watching previously
-    
-    '''
+    # to check if there are any topics we were watching previously so that it can be added
+    # as a parent of the Treeview widget.
 
 def tab2_layout(tab2):
     global tab2_listBox
@@ -680,21 +624,14 @@ def tab2_layout(tab2):
     tab2_listBox = Listbox(tab2_listbox_border, borderwidth=0, highlightthickness=0, background='white')
     tab2_scroll = Scrollbar(tab2_listbox_border, orient=VERTICAL, command=tab1_listBox.yview)
     tab2_listBox.config(font=(myFont, 12), yscrollcommand=tab2_scroll.set, relief=RAISED, 
-                        selectbackground='#737c7d')
+                        selectbackground=listbox_select_bg)
     
     tab2_scroll.pack(side=RIGHT, fill=Y)
     tab2_listBox.pack(padx=20, pady=20, fill=BOTH, expand=TRUE)
 
     #create list of "Publish" topics to insert into Listbox
-    pub_topic_list = [
-        '{device_id}/shadow/get/accepted',
-        '$aws/things/{device_id}/shadow/get/rejected',
-        '$aws/things/{device_id}/shadow/update/delta',
-        'mqtt_topic_prefix/m/d/{device_id}/c2d',
-        'mqtt_topic_prefix/{device_id}/jobs/rcv',
-        'm/#',
-        'a/connections'
-    ]
+    pub_topic_list = []
+    pub_topic_list = topics.topics_to_pub(pub_topic_list)
     tab2_update_listBox(pub_topic_list)  #add topics to our list
     tab2_listBox.bind("<<ListboxSelect>>", tab2_fillOut)  #create a binding on the listbox onclick
 
@@ -702,7 +639,7 @@ def tab2_layout(tab2):
     tab2_help.config(font=(myFont, 12), borderwidth=1, relief='raised', anchor=CENTER, justify=LEFT)
     tab2_help.grid(column=0, row=3, padx=(40,0), pady=(5,15), ipadx=2, sticky=N+S)
     ToolTip(tab2_help, msg='Click on a topic and a message\nabove to auto-fill or manually\ntype into the textbox.',
-            background='#AEDAEB', font=(myFont, 12), follow=True)
+            background=tab2_tooltip_bg, font=(myFont, 12), follow=True)
 
     tab2_topic_input = Entry(tab2)  #this is for the topic
     tab2_topic_input.config(font=(myFont, 12))
@@ -725,12 +662,11 @@ def tab2_layout(tab2):
     tab2_msg_input.config(fg='grey')
 
     #clear button to clear entry
-    tab2_clear_button = Button(tab2, text='Clear', command=do_clear2,
-                            activeforeground='white', activebackground='#9ed3e8')
+    tab2_clear_button = Button(tab2, text='Clear', command=do_clear2)
     tab2_clear_button.grid(column=6, row=3, padx=5, pady=(0,15), sticky=W+E+N+S)
     #make publish button go to publish function and clear entries
     tab2_publish_button = Button(tab2, text="Publish", command=do_publish, background=nordic_blue,
-                               foreground='white', activeforeground='white', activebackground='#9ed3e8')
+                               foreground='white')
     tab2_publish_button.grid(column=7, row=3, padx=(0,40), pady=(0,15), ipadx=20, sticky=W+E+N+S)
 
     button_config(tab2_clear_button)
@@ -749,16 +685,14 @@ def tab2_layout(tab2):
     tab2_messages_list = Listbox(tab2_messages_border, borderwidth=0, highlightthickness=0, background='white')
     tab2_msgsList_scroll = Scrollbar(tab2_messages_border, orient=VERTICAL, command=tab1_listBox.yview)
     tab2_messages_list.config(font=(myFont, 12), yscrollcommand=tab2_msgsList_scroll.set, relief=RAISED, 
-                        selectbackground='#737c7d')
+                        selectbackground=listbox_select_bg)
     tab2_msgsList_scroll.pack(side=RIGHT, fill=Y)
     tab2_messages_list.pack(padx=20, pady=20, fill=BOTH, expand=TRUE)
     tab2_messages_list.bind("<<ListboxSelect>>", tab2_fillout_msg)  #create a binding on the listbox onclick
 
-    #insert list of possible messages to publish
-    message_options = [
-        '{appId:Type}',
-        '{None}'
-    ]
+    #create list of possible messages to publish
+    message_options = []
+    message_options = topics.messages_to_pub(message_options)
     tab2_update_msgBox(message_options)  #add topics to our list
     tab2_messages_list.bind("<<ListboxSelect>>", tab2_fillout_msg)  #create binding
 
@@ -788,21 +722,14 @@ def tab1_layout(tab1):
     tab1_listBox = Listbox(tab1_listbox_border, borderwidth=0, highlightthickness=0, background='white')
     tab1_scroll = Scrollbar(tab1_listbox_border, orient=VERTICAL, command=tab1_listBox.yview)
     tab1_listBox.config(font=(myFont, 12), yscrollcommand=tab1_scroll.set, relief=RAISED, 
-                        selectbackground='#737c7d')
+                        selectbackground=listbox_select_bg)
     
     tab1_scroll.pack(side=RIGHT, fill=Y)
     tab1_listBox.pack(padx=(20,5), pady=20, fill=BOTH, expand=TRUE)
 
-    #create list of topics to insert into Listbox
-    sub_topic_list = [
-        '$aws/things/{device_id}/shadow/get',
-        '$aws/things/{device_id}/shadow/update',
-        'mqtt_topic_prefix/m/d/{device_id}/d2c',
-        'mqtt_topic_prefix/m/d/{device_id}/d2c/bulk',
-        'mqtt_topic_prefix/{device_id}/jobs/req',
-        'mqtt_topic_prefix/{device_id}/jobs/update',
-        'mqtt_topic_prefix/m/#'
-        ]
+    #create list of "Subscribe" topics to insert into listbox
+    sub_topic_list = []
+    sub_topic_list = topics.topics_to_sub(sub_topic_list)
     tab1_update_listBox(sub_topic_list)  #add topics to our list
     tab1_listBox.bind("<<ListboxSelect>>", tab1_fillOut)  #create a binding on the listbox onclick
 
@@ -819,16 +746,17 @@ def tab1_layout(tab1):
     tab1_sub_to_topic.config(fg='grey')
 
     #clear button to clear entry
-    tab1_clear_button = Button(tab1, text='Clear', command=do_clear,
-                               activeforeground='white', activebackground='#9ed3e8')
+    tab1_clear_button = Button(tab1, text='Clear', command=do_clear)
     tab1_clear_button.grid(column=5, row=3, padx=(5,0), pady=(0,15), sticky=W+E+N+S)
+
     #make subscribe button go to subscribe function and clear sub_to_topic Entry
     tab1_sub_button = Button(tab1, text="Subscribe", command=do_subscribe, background=nordic_blue,
-                               foreground='white', activeforeground='white', activebackground='#9ed3e8')
+                               foreground='white')
     tab1_sub_button.grid(column=6, row=3, padx=5, pady=(0,15), sticky=W+E+N+S)
+
     #make unsubscribe button go to unsubscribe function and clear sub_to_topic Entry
     tab1_unsub_button = Button(tab1, text="Unsubscribe", command=do_unsubscribe, background=nordic_lake,
-                                foreground='white', activeforeground='white', activebackground='#9ed3e8')
+                                foreground='white')
     tab1_unsub_button.grid(column=7, row=3, padx=(0,40), pady=(0,15), sticky=W+E+N+S)
     
     button_config(tab1_clear_button)
@@ -849,7 +777,7 @@ def tab1_layout(tab1):
     tab1_second_scroll = Scrollbar(tab1_subscribedList_border, orient=VERTICAL, command=tab1_subscribed_list.yview)
     tab1_third_scroll = Scrollbar(tab1_subscribedList_border, orient=HORIZONTAL, command=tab1_subscribed_list.xview)
     tab1_subscribed_list.config(font=(myFont, 12), yscrollcommand=tab1_second_scroll.set, relief=RAISED, 
-                        xscrollcommand=tab1_third_scroll.set, selectbackground='#737c7d')
+                        xscrollcommand=tab1_third_scroll.set, selectbackground=listbox_select_bg)
     tab1_second_scroll.pack(side=RIGHT, fill=Y)
     tab1_third_scroll.pack(side=BOTTOM, fill=X)
     tab1_subscribed_list.pack(padx=20, pady=20, fill=BOTH, expand=TRUE)
@@ -860,6 +788,7 @@ def create_right_frame(container):
     global terminal_list
     global terminal_input
     global first_start_flag
+    global terminal
 
     frame = Frame(container, background=light_grey)
     frame.columnconfigure(0, weight=1)      #one column
@@ -905,46 +834,35 @@ def create_right_frame(container):
     terminal_scroll.pack(side=RIGHT, fill=Y)
     terminal_list.pack(padx=10, pady=(10,0), fill=BOTH, expand=TRUE)
 
-    terminal_print("Welcome! Select a device to get started.")  #first line in terminal
-    terminal_print("Type /help for more information.")
-    terminal_list['state'] = DISABLED
-
     #textbox for user terminal
     terminal_input_frame = Frame(frame, background=light_grey)
     terminal_input_frame.grid(column=0, row=3, padx=10, ipadx=2, ipady=1, sticky=W+E+N+S)
 
     terminal_input = Entry(terminal_input_frame)
-    terminal_input.config(font=(myFont, 14), background='#d9d9d9')
+    terminal_input.config(font=(myFont, 14), background=terminal_input_bg)
     terminal_input.pack(padx=(0,5), pady=(0,8), fill=BOTH, expand=TRUE, side=LEFT)
 
+    #instantiate module Terminal
+    terminal = terminal.Terminal(terminal_list, terminal_input, mqtt_endpoint, mqtt_topic_prefix, client_id)
+
+    terminal.terminal_print("Welcome! Select a device to get started.")  #first line in terminal
+    terminal.terminal_print("Type /help for more information.")
+    terminal_list['state'] = DISABLED
+
     #enter terminal button
-    terminal_enter_button = Button(terminal_input_frame, text='Enter', command=terminal_enter) 
-    terminal_enter_button.config(background=nordic_blue, activebackground='#345',
-                                 foreground='white', activeforeground='white')
+    terminal_enter_button = Button(terminal_input_frame, text='Enter', command=terminal.terminal_enter) 
+    terminal_enter_button.config(background=nordic_blue, foreground='white')
     terminal_enter_button.pack(padx=(0,5), pady=(0,8), ipadx=15, fill=None, expand=FALSE, side=LEFT)
-    button_config(terminal_enter_button)
 
     #clear terminal button
-    terminal_clear_button = Button(terminal_input_frame, text='Clear', command=terminal_clear) 
-    terminal_clear_button.config(activebackground='#345', activeforeground='white')
+    terminal_clear_button = Button(terminal_input_frame, text='Clear', command=terminal.terminal_clear) 
     terminal_clear_button.pack(padx=(0,5), pady=(0,8), ipadx=15, fill=None, expand=FALSE, side=LEFT)
-    button_config(terminal_clear_button)
 
     #bind "Enter" key event with terminal_input
     terminal_input.bind('<Return>', terminal_enter_event)  #bind enter key with event function
+    button_config(terminal_enter_button)
+    button_config(terminal_clear_button)
 
-    '''
-    For the user terminal textbox,
-    If the user types in something that is saved/valid for our 
-    program, we will print something out on the terminal.
-    (i.e. /help will output all possible commands for our interface
-          /listdevices will output all devices in that account
-          /accountinfo will output mqtt account info
-          etc.)
-    
-    If the user types in something we don't know, just do nothing.
-    Everytime the user hits "enter", print out what was typed and clear the entry box
-    '''
 
     for widget in frame.winfo_children():
         widget.grid(padx=5, pady=3)
@@ -964,14 +882,6 @@ def create_left_frame(container):
     frame.option_add("*Background", 'white')
     frame.option_add("*Foreground", 'black')
 
-    '''
-    #nRF Cloud logo *****INCOMPLETE, try to make transparent
-    nrfLogo = ImageTk.PhotoImage(Image.open("nrfcloud_logo.png"))
-    logo = Label(frame, image=nrfLogo)
-    logo.config(background='#748587')
-    logo.grid(row=0, column=0, padx=(5), pady=(5), sticky=W+E+N+S)
-    '''
-
     #(0,0) select device drop down menu at top left
     device_options = []
     device_list = StringVar()
@@ -980,7 +890,7 @@ def create_left_frame(container):
    
     device_options.append('Select Device...')
     for device in http_get['items']:
-        if device['id'].startswith('nrf-'): #only include devices and not account device
+        if device['subType'] != 'account':     #only include devices and not the account device
             device_options.append(device['id'])    #put device IDs in device_list array
 
     select_device_frame = Frame(frame, borderwidth=2, relief="ridge")
@@ -988,7 +898,7 @@ def create_left_frame(container):
 
     select_device = OptionMenu(select_device_frame, device_list, *device_options)  #dropdown menu
     select_device.config(font=(myFont, 12), background=nordic_blue, foreground='white', activebackground=middle_grey)
-    select_device['menu'].configure(bg='#d6d6d6', activebackground=middle_grey, bd=0, font=(myFont, 12))
+    select_device['menu'].configure(bg=dropdown_menu_bg, activebackground=middle_grey, bd=0, font=(myFont, 12))
     select_device.pack(fill=BOTH, expand=TRUE)
 
     #(0,1) below that, account and device information
@@ -1054,8 +964,9 @@ def create_left_frame(container):
     log_off_frame.grid(column=0, row=7, padx=10, pady=15, sticky=W+E+S)
 
     log_off = Button(log_off_frame, text="Log Off", command=restartPopup)
-    log_off.config(activebackground='#9ed3e8', activeforeground='white', background='#505f63', foreground='white')
+    log_off.config(background=main_logoff_color, foreground='white')
     log_off.pack(pady=(0,10), fill=BOTH, expand=TRUE)
+    
     button_config(log_off)
 
     for widget in frame.winfo_children():
@@ -1063,7 +974,7 @@ def create_left_frame(container):
     return frame
 
 def main_screen():
-    '''Main Screen Configuration'''  
+    #Main Screen Configuration
     root.deiconify()    #show main page
     if first_start_flag == 0:   #only build once
         #build two frames for main window
@@ -1079,7 +990,8 @@ def main_screen():
         right_frame.config(background=light_grey)
         right_frame.grid(column=1, row=0, sticky=W+E+N+S)
 
-def edit_login_config_file(flag, data): #store new values into file
+def edit_login_config_file(flag, data): 
+    #store new values into file
     if flag == 1:   #store into API
         login_config[account_type]['api'] = api_key
     elif flag == 2: #store into clientCert
@@ -1092,7 +1004,8 @@ def edit_login_config_file(flag, data): #store new values into file
     with open('saved_login.ini', 'w') as configfile:
             login_config.write(configfile)    #write changes to file
 
-def complete_login():   #save the rest of the login info before moving on to main screen
+def complete_login():   
+    #save the rest of the login info before moving on to main screen
     global radiobutton_var
     
     #store valid certificates on configparser file
@@ -1129,8 +1042,8 @@ def reset_program():
         tab3_tree.delete(i)
     tab3_topic.clear()    #clear treeview topics list
 
-    terminal_clear()    
-    terminal_reset()    #reset terminal to how it was in the start
+    terminal.terminal_clear()    
+    terminal.terminal_reset()    #reset terminal to how it was in the start
 
 def popupLogin():
     reset_program()
@@ -1216,17 +1129,70 @@ def connectMQTT():
     #set flag so when we switch devices or exit we also client.loop_stop and client.disconnect()
     client_flag = 1     #and also to determine if certificates were valid
 
+def http_req_error(error):   #when we get an error on an HTTP request, determine which message to show
+    global http_error 
+
+    createAD.grab_release() #remove focus
+    createAD.withdraw() #get rid of popup window
+
+    http_error = Toplevel(root, highlightbackground='white', highlightthickness=2)
+    http_error.lift()     #keep window at the top
+    http_error.grab_set() #only enable this window to be interactive
+    http_error.iconbitmap('./nordicicon.ico')
+    http_error.title("nRF Cloud HTTP Request Error")
+    http_error['background'] = myBg 
+    
+    http_error.option_add("*Font", myFont)
+    http_error.option_add("*Background", myBg)
+    http_error.option_add("*Foreground", "white")
+
+    http_error_width = 400
+    http_error_height = 200
+
+    #already got screen dimensions from main, now find center points
+    http_error_x = int((screen_width/2) - (http_error_width/2))
+    http_error_y = int((screen_height/2) - (http_error_height/2))
+
+    http_error.geometry(f'{http_error_width}x{http_error_height}+{http_error_x}+{http_error_y}')
+    http_error.resizable(False, False)  #fixed size
+    http_error.overrideredirect(True)
+
+    error_message = 'ERROR: ' + error
+
+    http_error_label1 = Label(http_error, text="Unable to create account device.")
+    http_error_label2 = Label(http_error, text=error_message, foreground=error_red_font_color)
+    
+    http_error_label1.pack(pady=(40,20), fill=None, expand=FALSE, side=TOP)
+    http_error_label2.pack(pady=(0,40), fill=None, expand=FALSE, side=TOP)
+
+    ok_button = Button(http_error, text="Ok", command=httpError_to_login, background=nordic_blue)
+    tryAgain_button = Button(http_error, text="Try Again", command=do_createAD)
+    ok_button.pack(ipadx=30, fill=BOTH, expand=TRUE, side=LEFT)
+    tryAgain_button.pack(fill=BOTH, expand=TRUE, side=LEFT)
+    
+    button_config(ok_button)
+    button_config(tryAgain_button)
+
+def httpError_to_login():
+    http_error.grab_release() #remove focus
+    http_error.withdraw() #get rid of popup window
+    returnLogin()
+
 def do_createAD():
-    print("api_key:{}".format(api_key))
-    generate_certs.create_device(account_type, api_key, client_cert, priv_key)   #create acc dev and certs
+    http_req_flag = ''    #if this is blank after calling the func below then that means there were no errors
+    generate_certs.create_device(account_type, api_key, client_cert, priv_key, http_req_flag)   #create acc dev and certs
+    
+    if http_req_flag != '':
+        http_req_error(http_req_flag)    #go to function to pop up error message
+    
+    else:   #no errors, account device and certificates made
+        if client_cert not in data_to_list_client: #check if client certificate has been saved before
+            flag = 2    #store new valid client_cert into configparser file
+            edit_login_config_file(flag, client_cert)
 
-    if client_cert not in data_to_list_client: #check if client certificate has been saved before
-        flag = 2    #store new valid client_cert into configparser file
-        edit_login_config_file(flag, client_cert)
-
-    if priv_key not in data_to_list_key: #check if priv_key has been saved before
-        flag = 3    #store new valid api_key into configparser file
-        edit_login_config_file(flag, priv_key)
+        if priv_key not in data_to_list_key: #check if priv_key has been saved before
+            flag = 3    #store new valid priv_key into configparser file
+            edit_login_config_file(flag, priv_key)
 
     createAD_to_login() #return back to login window
  
@@ -1331,7 +1297,13 @@ def find_account_device(api_key):
     global priv_key
     global acc_device_id
 
-    http_get = http_requests.http_req('GET', DEV_URL, api_key)   #fetch devices info
+    http_req_flag = ''
+
+    http_get = http_requests.http_req('GET', DEV_URL, api_key, http_req_flag)   #fetch devices info
+
+    if http_req_flag != '':     #if there is an error 
+        http_req_error(http_req_flag)    #go to function to pop up error message
+
     device_list = []
     for device in http_get['items']:   #look for account device
         device_list.append(device['id']) #put device IDs in device_list array
@@ -1428,7 +1400,8 @@ def invalid_certs_alert():
     invalid_login_label.pack(fill=None, expand=FALSE, side=TOP)
     invalid_login_label.after(2000, lambda: invalid_login_label.pack_forget())
 
-def invalid_login_alert():    #shows error label for two seconds
+def invalid_login_alert():    
+    #show error label for two seconds
     global invalid_login_label
 
     invalid_login_label.config(text='Invalid login credentials!\n Please try again.')
@@ -1436,16 +1409,21 @@ def invalid_login_alert():    #shows error label for two seconds
     invalid_login_label.after(2000, lambda: invalid_login_label.pack_forget())
 
 def enter_login():
-    '''check if API key is valid- if so, store into configparser file and continue'''
+    #check if API key is valid- if so, store into configparser file and continue
     global login 
     global http_create
     global api_key
 
     #get api_key from input
     api_key = apikey_input.get()    #get API key from input
+    http_req_flag = ''
 
     #if else statement to test if we can login, otherwise send error and stay at login screen
-    http_create = http_requests.http_req('GET', ACC_URL, api_key)  #fetch acc info
+    http_create = http_requests.http_req('GET', ACC_URL, api_key, http_req_flag)  #fetch acc info
+
+    if http_req_flag != '':     #if there is an error
+        http_req_error(http_req_flag)    #go to function to pop up error message
+
     check = [i for i in http_create if isinstance(i, str) and i.startswith('mqttEndpoint')]
     check = str(check)
     check = check.strip("['']") #to be able to use for comparison in if-else statement below
@@ -1458,14 +1436,17 @@ def enter_login():
             edit_login_config_file(flag, api_key)
         find_account_device(api_key)   #look for account device
     else:
-        invalid_login_alert()
+        invalid_login_alert()   #otherwise send error alert
 
 def exit_login():
     root.destroy()  #terminate main loop and destroy all widgets
     root.quit()     #quit the application
 
 def login_screen():
-    '''Login Frame'''
+    #Login screen verifies if API key is valid and proceeds to connect
+    #to MQTT broker with ca certificate, client certificate and private key.
+    #A .ini file is created to save the valid API keys and certificates.
+
     global login 
     global invalid_login_label
 
@@ -1489,7 +1470,7 @@ def login_screen():
     login.option_add("*Background", myBg)
     login.option_add("*Foreground", "white")
 
-    #set login dimensions
+    #set login screen dimensions
     login_width = 450
     login_height = 550
 
@@ -1499,9 +1480,8 @@ def login_screen():
 
     login.geometry(f'{login_width}x{login_height}+{login_x}+{login_y}')
     login.resizable(False, False)  #fixed size
-    #login.overrideredirect(True)
 
-    '''Login Screen'''
+    #login Screen layout
     login.columnconfigure(tuple(range(4)), weight=2)    #four columns
     login.rowconfigure(tuple(range(10)), weight=2)   #10 rows
     login.rowconfigure(4, weight=1) #make one row smaller to adjust spacing
@@ -1522,7 +1502,7 @@ def login_screen():
     step1_label.config(font=(None, 12, BOLD))
     step1_label.pack(fill=None, expand=TRUE)
 
-    #order: prod, beta, dev, feat
+    #radiobuttons in order: prod, beta, dev, feat
     radiobutton_var = IntVar()
     select_frame = Frame(login)
     select_frame.grid(pady=(0,15), column=0, row=3, columnspan=4)
@@ -1547,25 +1527,13 @@ def login_screen():
     feat_select.pack(padx=(15,0), fill=None, expand=False, side=LEFT)
     feat_select.deselect()  
 
-    '''
-    For the Radiobuttons, when one is selected, make it go to a function that
-    .gets the one that is selected, then open a file that is formatted in a dict
-    and use the dict with the same key "type" has the one that is selected to output its
-    corresponding cacert, private key, and API key.
-    But this will only work if the account has been logged in before.
-    And if the account has logged in successfully before and the user manually 
-    chooses files, try to use those files to connect.
-    If login success, replace those files with whatever was in caCert : "", privKey : "", etc.
-
-    '''
-
     step2_frame = Frame(login)
     step2_frame.grid(column=0, row=4, columnspan=4, padx=5, pady=(0,5), sticky=W+E+N+S)
     step2_label = Label(step2_frame, text="[ ? ] Insert associated files:")
     step2_label.config(font=(None, 11, BOLD))
     step2_label.pack(fill=None, expand=FALSE, side=BOTTOM)
     ToolTip(step2_label, msg='Select client cert and private key\nfile paths from history if any,\nor browse for new ones.',
-            background='#AEDAEB', foreground='black', font=(None, 10), follow=True)
+            background=tooltip_bg, foreground='black', font=(None, 10), follow=True)
 
     clientCert_frame = Frame(login)
     clientCert_frame.grid(column=0, row=5, columnspan=2, padx=(5,2), sticky=W+E+N+S)
@@ -1629,26 +1597,22 @@ def login_screen():
     blank_corner_frame.grid(column=3, row=9, padx=(0,5), pady=(0,5), sticky=W+E+N+S)
     #blank corner will pop up notification if invalid login
     invalid_login_label = Label(blank_corner_frame, text='')
-    invalid_login_label.config(font=(None, 9), foreground='red')    #red text color
+    invalid_login_label.config(font=(None, 9), foreground=error_red_font_color)
 
     #bind enter key with event function
     login.bind('<Return>', enter_login_press)
 
+    #apply effect to change colors when button is hovered over
     button_config(clientCert_browse_button)
     button_config(privKey_browse_button)
     button_config(enter_login_button)
     button_config(exit_login_button)
     button_config(new_certs_button)
 
-def doNothing():
-    pass
-
-
-'''Root Frame'''
+#Root Frame
 root = Tk() #setup root window
 root.iconbitmap('./nordicicon.ico')
 root.title("nRF Cloud Device Monitor Tool")
-root['background'] = '#748587'
 root.withdraw()  #hide main screen for now
 
 #set window dimensions
