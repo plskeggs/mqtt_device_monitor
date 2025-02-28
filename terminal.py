@@ -12,27 +12,27 @@ class Terminal():
         self.__client_id = client_id
 
     def terminal_reset(self):
-        self.__terminal_list['state'] = NORMAL 
+        self.__terminal_list['state'] = NORMAL
         self.terminal_print("Welcome! Select a device to get started.")  #first line in terminal
         self.terminal_print("Type /help for more information.")
         self.__terminal_list['state'] = DISABLED
 
     def terminal_clear(self):   #clear terminal output and entry box
-        self.__terminal_list['state'] = NORMAL 
+        self.__terminal_list['state'] = NORMAL
         self.__terminal_input.delete(0, END)
         self.__terminal_list.delete(1.0, END)
         self.__terminal_list['state'] = DISABLED
 
-    def terminal_enter(self):    
+    def terminal_enter(self):
         user_input = self.__terminal_input.get()
         if user_input == '':    #nothing typed in, do nothing
-            return 
+            return
         else:
             self.__terminal_list['state'] = NORMAL
-            self.terminal_print(user_input)  #output user input on terminal 
+            self.terminal_print(user_input)  #output user input on terminal
             self.__terminal_list['state'] = DISABLED
 
-        self.__terminal_list['state'] = NORMAL 
+        self.__terminal_list['state'] = NORMAL
 
         if user_input == '/help':
             self.help_output()
@@ -40,9 +40,9 @@ class Terminal():
             self.__terminal_list.insert(END, 'Python Version 3.10.6\n')
             self.__terminal_list.insert(END, 'Developed SUMMER 2022\n\n')
         elif user_input == '-acc':
-            self.__terminal_list.insert(END, 'MQTT Endpoint: ' + self.__mqtt_endpoint + '\n') 
+            self.__terminal_list.insert(END, 'MQTT Endpoint: ' + self.__mqtt_endpoint + '\n')
             self.__terminal_list.insert(END, 'MQTT Topic Prefix: ' + self.__mqtt_topic_prefix + '\n')
-            self.__terminal_list.insert(END, 'MQTT Client ID: ' + self.__client_id + '\n\n')  
+            self.__terminal_list.insert(END, 'MQTT Client ID: ' + self.__client_id + '\n\n')
         else:
             pass    #do nothing
 
@@ -51,8 +51,8 @@ class Terminal():
 
     def terminal_print(self, text):   #terminal output
         self.__terminal_list['state'] = NORMAL
-        text_format = ' >> ' + text 
-        self.__terminal_list.insert(END, text_format + '\n') #insert at the bottom 
+        text_format = ' >> ' + text
+        self.__terminal_list.insert(END, text_format + '\n') #insert at the bottom
         self.__terminal_list.yview(END)    #move scrollbar along with text
         self.__terminal_list['state'] = DISABLED
 

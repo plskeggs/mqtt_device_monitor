@@ -4,7 +4,7 @@ from tkinter import W, E, N, S
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib import style
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg 
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 nordic_blue = '#00A9CE'
 
@@ -23,7 +23,7 @@ def animate_rsrp(i):
             yar1.append(0)
         else:
             yar1.append(data)
-        xar1.append(i)   
+        xar1.append(i)
         line1.set_data(range(1,1+len(yar1)), yar1)
 
     ax1.set_xlim(0,i+1)
@@ -35,19 +35,19 @@ def animate_button(i):
             yar2.append(0)
         else:
             yar2.append(data)
-        xar2.append(i)  
-        line2.set_data(range(1,1+len(yar2)), yar2) 
- 
+        xar2.append(i)
+        line2.set_data(range(1,1+len(yar2)), yar2)
+
     ax2.set_xlim(0,i+1) #move axis with time
     data_button.clear()
 
 def graph_rsrp(tab3_layout_right):
-    global xar1 
+    global xar1
     global yar1
     global line1
     global ax1
     global fig1
-    global anim_rsrp 
+    global anim_rsrp
 
     xar1 = []
     yar1 = []
@@ -66,14 +66,14 @@ def graph_rsrp(tab3_layout_right):
     anim_rsrp = animation.FuncAnimation(fig1, animate_rsrp, interval=5000)
 
 def graph_button(tab3_layout_right):
-    global xar2 
+    global xar2
     global yar2
     global line2
     global ax2
     global fig2
     global anim_button
 
-    xar2 = []   
+    xar2 = []
     yar2 = []
 
     style.use('ggplot')

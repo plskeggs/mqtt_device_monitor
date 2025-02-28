@@ -1,5 +1,5 @@
 '''
-Check for all three certificates or create an account device along 
+Check for all three certificates or create an account device along
 with its certificates.
 '''
 
@@ -7,8 +7,7 @@ import http_requests
 import argparse
 from os import makedirs, path
 
-devCert_URL = 'https://api.nrfcloud.com/v1/account/certificates'
-
+import base_url
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Device Credentials Installer",
@@ -36,13 +35,14 @@ def write_file(pathname, filename, string):
     f.close()
     return
 
-def create_device(account_type, api_key, client_cert, priv_key, http_req_flag):
-    http_req_flag = ''
-    create_dev_cert = http_requests.http_req('POST', devCert_URL, api_key, http_req_flag)  #create uses 'POST'
-    
+def create_device(account_type, api_key):
+    print(f"baseURL = {base_url.getBaseURL()}")
+    create_dev_cert, http_req_flag = http_requests.http_req('POST', base_url.getBaseURL() + 'account/certificates',
+                                            api_key)  #create uses 'POST'
+
+    print(f"create_dev_cert:{create_dev_cert} http_req_flag:{http_req_flag}")
     if http_req_flag != '':   #there was an error, send error type back to main
-        return http_req_flag 
-        
+        return None, None, http_req_flag
 
     keyOnly = create_dev_cert['privateKey']
     caOnly = create_dev_cert['caCert']
@@ -55,4 +55,4 @@ def create_device(account_type, api_key, client_cert, priv_key, http_req_flag):
     client_cert = './' + account_type + '_clientCert.pem'
     priv_key = './' + account_type + '_privateKey.pem'
 
-    return client_cert, priv_key 
+    return client_cert, priv_key, http_req_flag

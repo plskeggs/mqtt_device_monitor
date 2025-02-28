@@ -52,7 +52,7 @@ def topics_to_pub(topic_list):
     ]
     return topic_list
 
-def topics_to_sub(topic_list): 
+def topics_to_sub(topic_list):
     #create list of "Subscribe" topics to insert into Listbox
     topic_list = [
         '$aws/things/{device_id}/shadow/get',
@@ -63,7 +63,7 @@ def topics_to_sub(topic_list):
         '{mqtt_topic_prefix}/{device_id}/jobs/update',
         '{mqtt_topic_prefix}/m/#'
         ]
-    return topic_list 
+    return topic_list
 
 def messages_to_pub(message_options):
     #create list of messages to insert into Listbox
